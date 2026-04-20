@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 /Users/justinsmacbookair/.claude/plugins/marketplaces/ui-ux-pro-max-skill/.claude/skills/ui-ux-pro-max/scripts/search.py \"enterprise operations workspace data harmonization RevOps SaaS\" --design-system -p \"harmonIQ\" -f markdown)",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --app --no-eslint --import-alias \"@/*\" --yes)",
+      "Bash(npx create-next-app@latest harmoniq --typescript --tailwind --app --no-eslint --import-alias \"@/*\" --yes)"
+    ]
+  }
+}
