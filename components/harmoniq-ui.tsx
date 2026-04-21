@@ -206,7 +206,7 @@ export function WorkflowModeSelector({
   );
 }
 
-export function ImpactMetricCard({ metric }: { metric: WorkflowImpactMetric }) {
+export function ImpactMetricCard({ metric, compact = false }: { metric: WorkflowImpactMetric; compact?: boolean }) {
   const accent: Record<IssueSeverity, string> = {
     blocking: "border-red-200 bg-red-50 text-red-700",
     high: "border-red-200 bg-red-50 text-red-700",
@@ -217,13 +217,13 @@ export function ImpactMetricCard({ metric }: { metric: WorkflowImpactMetric }) {
   };
 
   return (
-    <div className={`rounded-lg border p-3 ${accent[metric.severity]}`}>
+    <div className={`rounded-lg border ${compact ? "p-3" : "p-3.5"} ${accent[metric.severity]}`}>
       <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">{metric.label}</p>
-      <div className="mt-2 flex items-baseline gap-1.5">
-        <span className="text-3xl font-black tabular-nums">{metric.value}</span>
+      <div className={`${compact ? "mt-1.5" : "mt-2"} flex items-baseline gap-1.5`}>
+        <span className={`${compact ? "text-2xl" : "text-3xl"} font-black tabular-nums`}>{metric.value}</span>
         <span className="text-xs font-bold">{metric.unit}</span>
       </div>
-      <p className="mt-2 text-xs leading-relaxed opacity-90">{metric.detail}</p>
+      <p className={`${compact ? "mt-1.5 text-[11px]" : "mt-2 text-xs"} leading-relaxed opacity-90`}>{metric.detail}</p>
     </div>
   );
 }

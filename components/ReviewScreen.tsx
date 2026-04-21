@@ -285,10 +285,10 @@ function FlagTable({ issueType }: { issueType: IssueType }) {
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] text-sm">
-          <thead className="bg-slate-50">
+          <thead className="bg-slate-50/90">
             <tr className="border-b border-slate-200">
               {["Scope", "Current value", "Candidate fill", "Confidence", "Rationale", "Review state"].map((heading) => (
-                <th key={heading} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <th key={heading} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   {heading}
                 </th>
               ))}
@@ -297,16 +297,16 @@ function FlagTable({ issueType }: { issueType: IssueType }) {
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.slice(0, 12).map((row) => (
               <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-3 py-3 text-xs font-bold text-slate-800">{row.scope}</td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-3 text-xs font-bold text-slate-800">{row.scope}</td>
+                <td className="px-4 py-3">
                   <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{row.current}</span>
                 </td>
-                <td className="px-3 py-3 text-xs font-semibold text-slate-800">{row.suggestedValue}</td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.suggestedValue}</td>
+                <td className="px-4 py-3">
                   <ConfidenceDots pct={row.confidence} />
                 </td>
-                <td className="px-3 py-3 text-xs leading-relaxed text-slate-600">{row.rationale}</td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">{row.rationale}</td>
+                <td className="px-4 py-3">
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
                     {row.reviewState}
                   </span>
@@ -336,10 +336,10 @@ function DiffTable({ issueType }: { issueType: IssueType }) {
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-sm">
-          <thead className="bg-slate-50">
+          <thead className="bg-slate-50/90">
             <tr className="border-b border-slate-200">
               {["Record", "Field", "Before / After", "Basis"].map((heading) => (
-                <th key={heading} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                <th key={heading} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   {heading}
                 </th>
               ))}
@@ -348,12 +348,12 @@ function DiffTable({ issueType }: { issueType: IssueType }) {
           <tbody className="divide-y divide-slate-100 bg-white">
             {rows.slice(0, 14).map((row) => (
               <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-3 py-3 text-xs font-bold text-slate-800">{row.account}</td>
-                <td className="px-3 py-3 font-mono text-xs text-indigo-700">{row.field}</td>
-                <td className="px-3 py-3">
+                <td className="px-4 py-3 text-xs font-bold text-slate-800">{row.account}</td>
+                <td className="px-4 py-3 font-mono text-xs text-indigo-700">{row.field}</td>
+                <td className="px-4 py-3">
                   <DiffCell before={row.before} after={row.after} />
                 </td>
-                <td className="px-3 py-3 text-xs text-slate-600">{row.basis}</td>
+                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">{row.basis}</td>
               </tr>
             ))}
           </tbody>
@@ -502,13 +502,13 @@ function ManualFixDrawer({
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 backdrop-blur-[1px]">
       <button type="button" className="min-w-0 flex-1 cursor-default" aria-label="Close manual fix drawer" onClick={onClose} />
-      <aside className="flex h-full w-full max-w-4xl flex-col border-l border-slate-200 bg-white shadow-2xl">
-        <div className="border-b border-slate-200 px-5 py-4">
+      <aside className="flex h-full w-full max-w-5xl flex-col border-l border-slate-200 bg-white shadow-2xl">
+        <div className="shrink-0 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur">
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">Manual exception handling</p>
               <h2 className="mt-1 text-lg font-black text-slate-950">{title}</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500">
                 Edit only the affected field for identified records. Suggestions stay reviewable; saving creates an auditable override log.
               </p>
             </div>
@@ -523,7 +523,7 @@ function ManualFixDrawer({
               </svg>
             </button>
           </div>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
               {rows.length} affected records
             </span>
@@ -536,7 +536,7 @@ function ManualFixDrawer({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-5">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Affected records only</p>
             <button
@@ -554,8 +554,8 @@ function ManualFixDrawer({
               const isUnchanged = draft.decision === "unchanged";
 
               return (
-                <section key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+                <section key={row.id} className="rounded-lg border border-slate-200 bg-white p-3.5">
+                  <div className="grid gap-3.5 xl:grid-cols-[0.95fr_1.05fr]">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-[11px] font-bold text-slate-500">{row.recordId}</span>
@@ -565,7 +565,7 @@ function ManualFixDrawer({
                       </div>
                       <p className="mt-2 text-sm font-black text-slate-950">{row.accountName}</p>
                       <p className="mt-1 text-xs text-slate-500">{row.context}</p>
-                      <dl className="mt-3 grid gap-2 text-xs">
+                      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
                         <div>
                           <dt className="font-bold uppercase tracking-wide text-slate-400">Current value</dt>
                           <dd className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-red-700">
@@ -581,7 +581,7 @@ function ManualFixDrawer({
                       </dl>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                       <div>
                         <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500" htmlFor={`manual-${row.id}`}>
                           Manual value
@@ -591,29 +591,29 @@ function ManualFixDrawer({
                           value={draft.value}
                           onChange={(event) => updateDraft(row, event.target.value, "manual")}
                           placeholder={`Enter ${row.fieldLabel.toLowerCase()}`}
-                          className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                          className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
                         />
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <button
                           type="button"
                           disabled={!row.suggestedValue}
                           onClick={() => updateDraft(row, row.suggestedValue, "suggested")}
-                          className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          className="rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           Use suggestion
                         </button>
                         <button
                           type="button"
                           onClick={() => updateDraft(row, row.currentValue, "unchanged")}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
                         >
                           Leave unchanged
                         </button>
                       </div>
 
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                         <div className="flex items-center justify-between gap-3">
                           <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Suggestion rationale</p>
                           <ConfidenceDots pct={row.confidence} />
@@ -631,7 +631,7 @@ function ManualFixDrawer({
           </div>
         </div>
 
-        <div className="border-t border-slate-200 bg-white px-5 py-4">
+        <div className="shrink-0 border-t border-slate-200 bg-white/95 px-5 py-3.5 shadow-[0_-8px_20px_rgba(15,23,42,0.04)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-xl text-xs leading-relaxed text-slate-500">
               Saving resolves this issue type as a reviewed decision. Field edits update the cleaned CSV; unchanged exceptions are logged in review status.
@@ -766,13 +766,13 @@ export default function ReviewScreen({
           actions={<WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />}
         />
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-5 px-6 py-5">
           <RationaleBlock title={`Why this ranks for ${workflow.shortLabel}`}>
             <p>{definition.priorityReason}</p>
           </RationaleBlock>
 
-          <section className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <div>
                 <h2 className="text-sm font-black text-slate-950">Downstream Impact Simulator</h2>
                 <p className="mt-1 text-xs text-slate-500">{workflow.primaryRisk}</p>
@@ -781,9 +781,9 @@ export default function ReviewScreen({
                 {workflow.label}
               </span>
             </div>
-            <div className="grid gap-3 lg:grid-cols-3">
+            <div className="grid gap-3 p-3.5 lg:grid-cols-3">
               {impactMetrics.map((metric) => (
-                <ImpactMetricCard key={metric.label} metric={metric} />
+                <ImpactMetricCard key={metric.label} metric={metric} compact />
               ))}
             </div>
           </section>
@@ -797,7 +797,7 @@ export default function ReviewScreen({
                 {definition.reviewMode}
               </span>
             </div>
-            <div className="p-4">
+            <div className="p-3.5">
               <RecordPreview issueType={activeIssueType} />
             </div>
           </section>
@@ -806,31 +806,37 @@ export default function ReviewScreen({
 
       <aside
         className={`flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white transition-[width] duration-200 ease-out ${
-          recommendationCollapsed ? "w-14" : "w-80"
+          recommendationCollapsed ? "w-[4.25rem]" : "w-80"
         }`}
       >
-        <div className={recommendationCollapsed ? "flex h-full flex-col items-center bg-white" : "hidden"}>
+        <div className={recommendationCollapsed ? "flex h-full flex-col items-center bg-slate-50/95 shadow-[inset_1px_0_0_rgba(226,232,240,0.75)]" : "hidden"}>
           <button
             type="button"
             onClick={() => setRecommendationCollapsed(false)}
-            className="mt-3 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            className="mt-4 flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
             aria-label="Expand analysis panel"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M9 3.5 5.5 7 9 10.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
-          <div className="mt-4 flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+          <div className="mt-5 h-px w-8 bg-slate-200" aria-hidden="true" />
+          <div className="mt-5 flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 bg-white text-indigo-700">
             <svg width="14" height="14" viewBox="0 0 13 13" fill="none" aria-hidden="true">
               <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
             </svg>
           </div>
-          <div className="mt-4 flex flex-1 items-start justify-center">
-            <p className="origin-center rotate-90 whitespace-nowrap text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+          <div className="mt-5 flex flex-1 items-center justify-center">
+            <p
+              className="rotate-180 whitespace-nowrap text-[10px] font-black uppercase tracking-[0.2em] text-slate-500"
+              style={{ writingMode: "vertical-rl" }}
+            >
               Analysis
             </p>
           </div>
-          <div className="mb-4 h-2 w-2 rounded-full bg-indigo-500" aria-hidden="true" />
+          <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white" aria-hidden="true">
+            <span className="h-2 w-2 rounded-full bg-indigo-500" />
+          </div>
         </div>
 
         <div className={recommendationCollapsed ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
