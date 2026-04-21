@@ -32,7 +32,7 @@ function ProductMock() {
   return (
     // Outer: clips the scaled content to the visual size
     <div
-      className="relative overflow-hidden rounded-xl border border-slate-200/80 shadow-2xl shadow-slate-900/10 ring-1 ring-slate-900/5"
+      className="relative overflow-hidden rounded-lg border border-slate-200 bg-white ring-1 ring-slate-900/5"
       style={{ height: "322px" }}
       aria-hidden="true"
     >
@@ -284,36 +284,6 @@ function ProblemCard({
   );
 }
 
-function WorkflowStep({
-  number,
-  title,
-  body,
-  icon,
-}: {
-  number: number;
-  title: string;
-  body: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="flex gap-5">
-      <div className="flex flex-col items-center">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
-          {icon}
-        </div>
-        {number < 3 && <div className="mt-2 w-px flex-1 bg-slate-200" />}
-      </div>
-      <div className="pb-10">
-        <div className="flex items-center gap-2.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Step {number}</span>
-        </div>
-        <p className="mt-1 text-lg font-black tracking-tight text-slate-950">{title}</p>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">{body}</p>
-      </div>
-    </div>
-  );
-}
-
 function TrustItem({
   title,
   body,
@@ -336,36 +306,12 @@ function TrustItem({
   );
 }
 
-function OutcomeCard({
-  title,
-  body,
-  color,
-}: {
-  title: string;
-  body: string;
-  color: "emerald" | "indigo" | "violet" | "sky";
-}) {
-  const top = { emerald: "bg-emerald-500", indigo: "bg-indigo-500", violet: "bg-violet-500", sky: "bg-sky-500" }[color];
-  return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className={`h-1 w-full ${top}`} />
-      <div className="p-5">
-        <p className="text-sm font-black text-slate-950">{title}</p>
-        <p className="mt-2 text-sm leading-relaxed text-slate-500">{body}</p>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main landing page ────────────────────────────────────────────────────────
 export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 antialiased">
-
-      {/* ── Nav ── */}
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-sm">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
-          {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 text-slate-900 hover:text-slate-700">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -375,20 +321,18 @@ export default function LandingPage() {
             <span className="text-[15px] font-bold tracking-tight">harmonIQ</span>
           </Link>
 
-          {/* Nav links */}
           <nav className="hidden items-center gap-6 sm:flex">
-            <a href="#how-it-works" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">
+            <a href="#workflow" className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
               How it works
             </a>
-            <a href="#trust" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">
-              Trust model
+            <a href="#trust" className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
+              Trust
             </a>
           </nav>
 
-          {/* CTA */}
           <Link
             href="/demo"
-            className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700 transition-colors"
+            className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white transition-colors hover:bg-indigo-700"
           >
             Open demo
             <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
@@ -398,34 +342,24 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="relative overflow-hidden border-b border-slate-100 bg-white">
-        {/* Subtle background grid */}
-        <div
-          className="pointer-events-none absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: "linear-gradient(#0f172a 1px, transparent 1px), linear-gradient(to right, #0f172a 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-          }}
-        />
-        <div className="relative mx-auto max-w-6xl px-6 py-20 lg:py-28">
-          <div className="grid items-center gap-16 lg:grid-cols-[1fr_1.1fr]">
-            {/* Copy */}
+      <section className="border-b border-slate-100 bg-white">
+        <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
+          <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
             <div>
               <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                 <span className="text-[12px] font-semibold text-indigo-700">AI-assisted CRM data readiness</span>
               </div>
-              <h1 className="text-4xl font-black leading-[1.1] tracking-tight text-slate-950 lg:text-[2.75rem]">
-                Find CRM data issues before they break routing, scoring, and ops
+              <h1 className="text-4xl font-black leading-[1.08] tracking-tight text-slate-950 lg:text-[3rem]">
+                Turn messy CRM exports into review-ready, trustworthy data
               </h1>
-              <p className="mt-5 text-lg leading-relaxed text-slate-500">
-                Upload a CRM export, surface high-impact data issues in seconds, and walk through AI-recommended fixes with full context — then export a cleaner dataset with a traceable audit trail.
+              <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-600">
+                harmonIQ helps operations teams find high-impact CRM issues before they break routing, reporting, segmentation, and planning.
               </p>
-              <div className="mt-8 flex flex-wrap items-center gap-3">
+              <div className="mt-7 flex flex-wrap items-center gap-3">
                 <Link
                   href="/demo"
-                  className="flex h-11 items-center gap-2 rounded-xl bg-indigo-600 px-6 text-[15px] font-bold text-white shadow-lg shadow-indigo-500/25 hover:bg-indigo-700 hover:shadow-indigo-500/30 transition-all"
+                  className="flex h-11 items-center gap-2 rounded-lg bg-indigo-600 px-5 text-[15px] font-bold text-white transition-colors hover:bg-indigo-700"
                 >
                   Open demo
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -433,177 +367,110 @@ export default function LandingPage() {
                   </svg>
                 </Link>
                 <a
-                  href="#how-it-works"
-                  className="flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-6 text-[15px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all"
+                  href="#workflow"
+                  className="flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-[15px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
                 >
                   See workflow
                 </a>
               </div>
-              {/* Trust footnote */}
-              <p className="mt-6 text-xs text-slate-400">
-                No upload required · pre-loaded demo dataset · all analysis runs locally
-              </p>
+              <Link
+                href="/demo?sample=crm"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 transition-colors hover:border-indigo-300 hover:bg-indigo-100"
+              >
+                Start with sample dataset
+                <span className="text-xs font-medium text-indigo-500">opens the readiness profile</span>
+              </Link>
+              <p className="mt-4 text-xs text-slate-400">Pre-loaded messy CRM dataset. No account or external upload required.</p>
             </div>
 
-            {/* Product mock */}
             <div className="relative hidden lg:block">
-              {/* Glow behind the mock */}
-              <div className="pointer-events-none absolute -inset-8 rounded-3xl bg-gradient-to-br from-indigo-50 via-slate-50 to-white opacity-80" />
-              <div className="relative">
-                <ProductMock />
-              </div>
+              <ProductMock />
             </div>
           </div>
         </div>
       </section>
 
-      {/* ── Problem ── */}
-      <section id="problem" className="border-b border-slate-100 bg-slate-50 py-20">
+      <section id="why" className="border-b border-slate-100 bg-slate-50 py-14">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-12 max-w-2xl">
-            <SectionLabel>The problem</SectionLabel>
-            <h2 className="text-3xl font-black tracking-tight text-slate-950">
-              Messy CRM data has real business consequences
-            </h2>
-            <p className="mt-3 text-base leading-relaxed text-slate-500">
-              It's not just a cleanliness issue. Bad data breaks the downstream decisions your ops, sales, and marketing teams rely on every day.
+          <div className="mb-8 max-w-2xl">
+            <SectionLabel>Why it matters</SectionLabel>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950">Bad CRM data becomes operational risk</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              harmonIQ frames cleanup around the workflows that depend on the data, so teams know what to fix first.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <ProblemCard
               severity="critical"
               title="Routing breaks silently"
-              body="Missing owner and segment values cause records to fall out of rep queues and territory assignments without any error — they simply don't get worked."
+              body="Missing owners and segments keep records out of rep queues."
             />
             <ProblemCard
               severity="critical"
-              title="Pipeline reporting is inflated"
-              body="Duplicate account clusters overstate account volume, double-count revenue in forecasts, and distort rep performance metrics across the board."
+              title="Reporting gets distorted"
+              body="Duplicate accounts inflate pipeline and account counts."
             />
             <ProblemCard
               severity="high"
-              title="Outreach fails downstream"
-              body="Invalid or incomplete email values cause bounce, damage sender reputation, and silently exclude contacts from outreach sequences before they start."
+              title="Outreach fails"
+              body="Invalid email values create bounces and sequence gaps."
             />
             <ProblemCard
               severity="high"
-              title="Segmentation logic fails"
-              body="Inconsistent state formats and missing segment values break geographic filters, territory rules, and persona-based scoring criteria in your stack."
-            />
-            <ProblemCard
-              severity="medium"
-              title="Schema drift causes friction"
-              body="Field naming mismatches between exports and review models create confusion, slow imports, and introduce errors when teams act on the data."
-            />
-            <ProblemCard
-              severity="medium"
-              title="Manual cleanup doesn't scale"
-              body="Spreadsheet fixes are slow, undocumented, and hard to audit. Teams spend hours cleaning data that gets messy again before the next sync."
+              title="Planning loses trust"
+              body="Inconsistent fields weaken segmentation and territory logic."
             />
           </div>
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section id="how-it-works" className="border-b border-slate-100 bg-white py-20">
+      <section id="workflow" className="border-b border-slate-100 bg-white py-14">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="grid gap-16 lg:grid-cols-[1fr_1.2fr] lg:items-start">
-            {/* Steps */}
-            <div>
-              <SectionLabel>How it works</SectionLabel>
-              <h2 className="mb-10 text-3xl font-black tracking-tight text-slate-950">
-                From messy export to clean, traceable data in three steps
-              </h2>
-              <div>
-                <WorkflowStep
-                  number={1}
-                  title="Upload your CRM export"
-                  body="Drop in a CSV from Salesforce, HubSpot, or your data warehouse. harmonIQ parses column structure and confirms key field mappings automatically."
-                  icon={
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                      <path d="M9 3v10M5 9l4-4 4 4M3 15h12" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  }
-                />
-                <WorkflowStep
-                  number={2}
-                  title="Review issues by business impact"
-                  body="Each detected issue is ranked by downstream risk — not record count. You see the rationale, confidence level, and exactly what breaks if it stays unresolved."
-                  icon={
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                      <path d="M9 5v5l3 3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                      <circle cx="9" cy="9" r="6.5" stroke="currentColor" strokeWidth="1.7"/>
-                    </svg>
-                  }
-                />
-                <WorkflowStep
-                  number={3}
-                  title="Approve fixes and export"
-                  body="Accept recommended fixes at the issue-type level. Every decision is logged with context and timestamp. Export a cleaner dataset alongside a full change audit."
-                  icon={
-                    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-                      <path d="M3.5 9.5l3.5 3.5 7.5-7.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  }
-                />
+          <div className="mb-8 max-w-2xl">
+            <SectionLabel>How it works</SectionLabel>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950">A simple review path from export to cleaner data</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {[
+              {
+                step: "01",
+                title: "Upload or start sample",
+                body: "Parse a messy CRM CSV and confirm key fields like account, owner, email, state, and segment.",
+              },
+              {
+                step: "02",
+                title: "Review ranked issues",
+                body: "See issues prioritized by routing, reporting, segmentation, and planning impact.",
+              },
+              {
+                step: "03",
+                title: "Approve and export",
+                body: "Apply approved changes, recalculate readiness, and export a cleaned CSV plus change summary.",
+              },
+            ].map((item) => (
+              <div key={item.step} className="rounded-lg border border-slate-200 bg-white p-5">
+                <p className="font-mono text-xs font-black text-indigo-600">{item.step}</p>
+                <p className="mt-3 text-base font-black text-slate-950">{item.title}</p>
+                <p className="mt-2 text-sm leading-relaxed text-slate-600">{item.body}</p>
               </div>
-            </div>
-
-            {/* Workflow callout cards */}
-            <div className="space-y-3 lg:pt-20">
-              {[
-                {
-                  label: "Issue profile",
-                  title: "Missing Owner Fields",
-                  meta: "14 findings · Blocking Routing · 99% confidence",
-                  body: "Records without a valid owner won't enter rep queues. harmonIQ flags every instance and recommends a safe review annotation before routing resumes.",
-                  badge: "High",
-                  badgeColor: "bg-red-50 border-red-200 text-red-700",
-                },
-                {
-                  label: "Change preview",
-                  title: "Inconsistent State Values",
-                  meta: "51 findings · Breaks Segmentation · deterministic",
-                  body: "State values appear in 7+ formats across this dataset. harmonIQ standardizes all to USPS 2-letter — a safe, reversible correction with no ambiguity.",
-                  badge: "Medium",
-                  badgeColor: "bg-amber-50 border-amber-200 text-amber-700",
-                },
-              ].map((card) => (
-                <div key={card.title} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <p className="mb-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">{card.label}</p>
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[15px] font-black text-slate-950">{card.title}</p>
-                      <p className="mt-0.5 text-xs text-slate-400">{card.meta}</p>
-                    </div>
-                    <span className={`shrink-0 rounded border px-2 py-0.5 text-[11px] font-bold ${card.badgeColor}`}>
-                      {card.badge}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-500">{card.body}</p>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── Trust ── */}
-      <section id="trust" className="border-b border-slate-100 bg-slate-50 py-20">
+      <section id="trust" className="border-b border-slate-100 bg-slate-50 py-14">
         <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-12 max-w-2xl">
-            <SectionLabel>Trust model</SectionLabel>
-            <h2 className="text-3xl font-black tracking-tight text-slate-950">
-              Designed for business teams, not just data engineers
-            </h2>
-            <p className="mt-3 text-base leading-relaxed text-slate-500">
-              harmonIQ shows its reasoning at every step. Every recommendation includes rationale, confidence, and downstream context — and nothing changes without explicit approval.
+          <div className="mb-8 max-w-2xl">
+            <SectionLabel>Trust and reviewability</SectionLabel>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950">AI assistance without a black box</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              Recommendations are structured for business review: visible rationale, confidence, preview, and approval before export.
             </p>
           </div>
-          <div className="grid gap-8 sm:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-3">
             <TrustItem
               title="AI-assisted, not AI-decided"
-              body="Recommendations detect and explain issues. Every change requires your explicit approval before it applies. You stay in control of what exports."
+              body="The system explains recommendations in plain English and keeps the user in control."
               icon={
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M8 2v6l3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -612,8 +479,8 @@ export default function LandingPage() {
               }
             />
             <TrustItem
-              title="Ranked by business impact, not record count"
-              body="Issues are prioritized by downstream consequence — routing blocks and pipeline distortion surface before cosmetic formatting cleanup."
+              title="Review before export"
+              body="Issue types are approved, skipped, or undone before a cleaned dataset is generated."
               icon={
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M2 12l4-4 3 3 5-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -621,8 +488,8 @@ export default function LandingPage() {
               }
             />
             <TrustItem
-              title="Transparent by design"
-              body="Every recommendation shows its rationale, detection confidence, and the downstream implication of leaving the issue unresolved — before you decide."
+              title="Rationale, confidence, preview"
+              body="Each recommendation shows why it matters, how confident it is, and what will change."
               icon={
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5"/>
@@ -630,100 +497,34 @@ export default function LandingPage() {
                 </svg>
               }
             />
-            <TrustItem
-              title="Fully reversible until export"
-              body="Every decision can be undone before export. Changes log with issue context and timestamp so any reviewer can trace exactly what changed and why."
-              icon={
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                  <path d="M4 8a4 4 0 1 1 .5 2M4 8V5M4 8H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              }
-            />
-          </div>
-
-          {/* Trust visual: readiness score bar */}
-          <div className="mt-12 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 px-6 py-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Readiness score · live as you review</p>
-            </div>
-            <div className="grid divide-y divide-slate-100 sm:divide-x sm:divide-y-0 sm:grid-cols-3">
-              {[
-                { label: "Before review",   score: 35, bar: "bg-red-500",     width: "35%",  status: "Not ready",   statusColor: "text-red-600" },
-                { label: "After partial review", score: 67, bar: "bg-amber-400",  width: "67%",  status: "Needs work",  statusColor: "text-amber-600" },
-                { label: "All issues resolved",  score: 100, bar: "bg-emerald-500", width: "100%", status: "Ready",       statusColor: "text-emerald-600" },
-              ].map((item) => (
-                <div key={item.label} className="p-5">
-                  <p className="text-xs font-semibold text-slate-400">{item.label}</p>
-                  <p className="mt-2 text-4xl font-black tabular-nums text-slate-950">{item.score}</p>
-                  <p className={`mt-0.5 text-xs font-bold ${item.statusColor}`}>{item.status}</p>
-                  <div className="mt-3 h-1.5 rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full ${item.bar}`} style={{ width: item.width }} />
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
 
-      {/* ── Business outcomes ── */}
-      <section id="outcomes" className="border-b border-slate-100 bg-white py-20">
-        <div className="mx-auto max-w-6xl px-6">
-          <div className="mb-12 max-w-2xl">
-            <SectionLabel>Business outcomes</SectionLabel>
-            <h2 className="text-3xl font-black tracking-tight text-slate-950">
-              The downstream difference
-            </h2>
-            <p className="mt-3 text-base leading-relaxed text-slate-500">
-              Cleaner CRM data doesn't just look better in a spreadsheet — it changes what's possible in the tools and workflows that depend on it.
-            </p>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <OutcomeCard
-              color="emerald"
-              title="Cleaner routing inputs"
-              body="Rep queues fill with records that have valid owners, clean contact data, and accurate territory assignments."
-            />
-            <OutcomeCard
-              color="indigo"
-              title="More reliable segmentation"
-              body="Territory and persona filters run on standardized field values — fewer false exclusions, better list quality."
-            />
-            <OutcomeCard
-              color="violet"
-              title="Accurate pipeline reporting"
-              body="Deduplication prevents double-counting in forecast views, dashboards, and revenue rollups."
-            />
-            <OutcomeCard
-              color="sky"
-              title="Faster ops cycles"
-              body="Less manual cleanup before activating data. Shorter time from CRM export to trusted, actionable data."
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ── Final CTA ── */}
-      <section className="bg-slate-950 py-24">
+      <section className="bg-slate-950 py-16">
         <div className="mx-auto max-w-3xl px-6 text-center">
           <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.15em] text-indigo-400">
             Interactive demo
           </p>
-          <h2 className="text-3xl font-black tracking-tight text-white lg:text-4xl">
-            See harmonIQ in action
-          </h2>
+          <h2 className="text-3xl font-black tracking-tight text-white">Walk through the readiness review</h2>
           <p className="mt-4 text-base leading-relaxed text-slate-400">
-            No setup. No upload required. A pre-loaded messy CRM dataset is already waiting — with real-world data quality issues to detect, review, and resolve.
+            Use the sample CRM dataset to see the full flow: analyze, prioritize, review recommendations, and export.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/demo"
-              className="flex h-12 items-center gap-2 rounded-xl bg-indigo-600 px-8 text-[15px] font-bold text-white shadow-lg shadow-indigo-900/40 hover:bg-indigo-500 transition-colors"
+              href="/demo?sample=crm"
+              className="flex h-11 items-center gap-2 rounded-lg bg-indigo-600 px-6 text-[15px] font-bold text-white transition-colors hover:bg-indigo-500"
             >
-              Open demo
+              Start with sample dataset
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
                 <path d="M3 7.5h9M8.5 4l4 3.5-4 3.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
+            </Link>
+            <Link
+              href="/demo"
+              className="flex h-11 items-center rounded-lg border border-slate-700 px-6 text-[15px] font-bold text-slate-200 transition-colors hover:bg-slate-900"
+            >
+              Open upload flow
             </Link>
           </div>
           <p className="mt-5 text-xs text-slate-500">
@@ -731,8 +532,6 @@ export default function LandingPage() {
           </p>
         </div>
       </section>
-
-      {/* ── Footer ── */}
       <footer className="border-t border-slate-800 bg-slate-950 px-6 py-6">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
           <div className="flex items-center gap-2">

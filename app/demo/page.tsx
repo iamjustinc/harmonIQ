@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import type { AppScreen, IssueType, IssueStatus, ApprovedChange } from "@/lib/types";
 import {
   INITIAL_SCORE,
   calculateScore,
   ISSUE_TYPE_ORDER,
 } from "@/lib/issueDetection";
+import { DATASET_META } from "@/lib/data";
 
 import UploadScreen from "@/components/UploadScreen";
 import ProfileScreen from "@/components/ProfileScreen";
@@ -26,6 +27,7 @@ const INITIAL_STATUSES: Record<IssueType, IssueStatus> = {
 
 // ─── Demo workspace page ──────────────────────────────────────────────────────
 export default function DemoPage() {
+  const sampleLaunchHandled = useRef(false);
   const [screen, setScreen] = useState<AppScreen>("upload");
   const [fileName, setFileName] = useState("");
   const [uploadedAt, setUploadedAt] = useState("");
@@ -39,6 +41,17 @@ export default function DemoPage() {
     setUploadedAt(new Date().toISOString());
     setScreen("profile");
   }, []);
+
+  useEffect(() => {
+    if (sampleLaunchHandled.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("sample") === "crm") {
+      sampleLaunchHandled.current = true;
+      handleAnalyze(DATASET_META.fileName);
+      window.history.replaceState(null, "", "/demo");
+    }
+  }, [handleAnalyze]);
 
   const handleBeginReview = useCallback(() => {
     const first = ISSUE_TYPE_ORDER.find(t => issueStatuses[t] === "pending") ?? ISSUE_TYPE_ORDER[0];
