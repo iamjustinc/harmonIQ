@@ -4,15 +4,23 @@ import Link from "next/link";
 // Represents the Decision Workspace at reduced scale.
 // Built at 900×520px, displayed at 0.62× → ~558×322px.
 function ProductMock() {
-  const queueItems = [
-    { title: "Missing Owner Fields",      count: 14, mode: "Review-first",             status: "approved" },
-    { title: "Duplicate Account Records", count: 18, mode: "Cluster review",            status: "skipped"  },
-    { title: "Invalid Email Formats",     count: 8,  mode: "Suggest obvious fixes",     status: "pending",  active: true },
-    { title: "Missing Segment Values",    count: 10, mode: "Review-first",             status: "pending"  },
-    { title: "Inconsistent State Values", count: 51, mode: "Deterministic correction", status: "pending"  },
-    { title: "Schema Mismatch",           count: 2,  mode: "Mapping confirmation",     status: "pending"  },
-    { title: "Improper Naming Format",    count: 12, mode: "Deterministic cleanup",    status: "pending"  },
-  ] as const;
+  type QueueItem = {
+    title: string;
+    count: number;
+    mode: string;
+    status: "approved" | "skipped" | "pending";
+    active: boolean;
+  };
+
+  const queueItems: QueueItem[] = [
+    { title: "Missing Owner Fields",      count: 14, mode: "Review-first",             status: "approved", active: false },
+    { title: "Duplicate Account Records", count: 18, mode: "Cluster review",            status: "skipped",  active: false },
+    { title: "Invalid Email Formats",     count: 8,  mode: "Suggest obvious fixes",     status: "pending",  active: true  },
+    { title: "Missing Segment Values",    count: 10, mode: "Review-first",             status: "pending",  active: false },
+    { title: "Inconsistent State Values", count: 51, mode: "Deterministic correction", status: "pending",  active: false },
+    { title: "Schema Mismatch",           count: 2,  mode: "Mapping confirmation",     status: "pending",  active: false },
+    { title: "Improper Naming Format",    count: 12, mode: "Deterministic cleanup",    status: "pending",  active: false },
+  ];
 
   const tableRows = [
     { scope: "REC-003 · Altura Systems",   current: "none@",                 issue: "Incomplete address",  rec: "Flag for correction"         },
