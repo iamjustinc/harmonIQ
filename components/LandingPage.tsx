@@ -350,8 +350,8 @@ export default function LandingPage() {
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                 <span className="text-[12px] font-semibold text-indigo-700">AI-assisted CRM data readiness</span>
               </div>
-              <h1 className="max-w-[760px] text-4xl font-black leading-[1.06] tracking-tight text-slate-950 lg:text-[3.25rem] xl:text-[3.45rem]">
-                Turn messy CRM exports into review-ready, trustworthy data
+              <h1 className="max-w-[760px] text-4xl font-black leading-[1.06] tracking-tight text-slate-950 lg:text-[3.05rem] xl:text-[3.25rem]">
+                Turn messy CRM exports into <span className="text-indigo-700">review-ready</span>, <span className="text-emerald-700">trustworthy data</span>
               </h1>
               <p className="mt-4 max-w-2xl text-[17px] leading-7 text-slate-600">
                 harmonIQ helps operations teams find high-impact CRM issues before they break routing, reporting, segmentation, and planning.
