@@ -33,7 +33,7 @@ function ProductMock() {
     // Outer: clips the scaled content to the visual size
     <div
       className="relative overflow-hidden rounded-lg border border-slate-200 bg-white ring-1 ring-slate-900/5"
-      style={{ height: "322px" }}
+      style={{ height: "322px", width: "558px" }}
       aria-hidden="true"
     >
       {/* Scale wrapper: 900px wide inner mock scaled to 62% = 558px */}
@@ -311,7 +311,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 antialiased">
       <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-4">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5 text-slate-900 hover:text-slate-700">
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600">
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
@@ -320,15 +320,6 @@ export default function LandingPage() {
             </div>
             <span className="text-[15px] font-bold tracking-tight">harmonIQ</span>
           </Link>
-
-          <nav className="hidden items-center gap-6 sm:flex">
-            <a href="#workflow" className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
-              How it works
-            </a>
-            <a href="#trust" className="text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
-              Trust
-            </a>
-          </nav>
 
           <Link
             href="/demo"
@@ -343,20 +334,32 @@ export default function LandingPage() {
       </header>
 
       <section className="border-b border-slate-100 bg-white">
-        <div className="mx-auto max-w-6xl px-6 py-16 lg:py-20">
-          <div className="grid items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
-            <div>
-              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1">
+        <div className="mx-auto max-w-7xl px-6 py-12 lg:py-14 xl:py-16">
+          <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(520px,0.92fr)] lg:gap-9 xl:gap-11">
+            <div className="max-w-3xl lg:pt-1">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1">
                 <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
                 <span className="text-[12px] font-semibold text-indigo-700">AI-assisted CRM data readiness</span>
               </div>
-              <h1 className="text-4xl font-black leading-[1.08] tracking-tight text-slate-950 lg:text-[3rem]">
+              <h1 className="max-w-[760px] text-4xl font-black leading-[1.06] tracking-tight text-slate-950 lg:text-[3.25rem] xl:text-[3.45rem]">
                 Turn messy CRM exports into review-ready, trustworthy data
               </h1>
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-slate-600">
+              <p className="mt-4 max-w-2xl text-[17px] leading-7 text-slate-600">
                 harmonIQ helps operations teams find high-impact CRM issues before they break routing, reporting, segmentation, and planning.
               </p>
-              <div className="mt-7 flex flex-wrap items-center gap-3">
+              <p
+                className="mt-3 flex h-5 items-center gap-2 text-sm font-semibold text-slate-500"
+              >
+                <span className="sr-only">Review before routing, reporting, segmentation, and planning</span>
+                <span aria-hidden="true" className="text-slate-400">Review before</span>
+                <span aria-hidden="true" className="hero-type-rotator">
+                  <span>routing</span>
+                  <span>reporting</span>
+                  <span>segmentation</span>
+                  <span>planning</span>
+                </span>
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
                 <Link
                   href="/demo"
                   className="flex h-11 items-center gap-2 rounded-lg bg-indigo-600 px-5 text-[15px] font-bold text-white transition-colors hover:bg-indigo-700"
@@ -375,15 +378,15 @@ export default function LandingPage() {
               </div>
               <Link
                 href="/demo?sample=crm"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 transition-colors hover:border-indigo-300 hover:bg-indigo-100"
+                className="mt-3 inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-bold text-indigo-700 transition-colors hover:border-indigo-300 hover:bg-indigo-100"
               >
                 Start with sample dataset
                 <span className="text-xs font-medium text-indigo-500">opens the readiness profile</span>
               </Link>
-              <p className="mt-4 text-xs text-slate-400">Pre-loaded messy CRM dataset. No account or external upload required.</p>
+              <p className="mt-3 text-xs text-slate-400">Pre-loaded messy CRM dataset. No account or external upload required.</p>
             </div>
 
-            <div className="relative hidden lg:block">
+            <div className="relative hidden justify-self-end lg:-mt-2 lg:block xl:-mt-3">
               <ProductMock />
             </div>
           </div>
@@ -532,22 +535,6 @@ export default function LandingPage() {
           </p>
         </div>
       </section>
-      <footer className="border-t border-slate-800 bg-slate-950 px-6 py-6">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-5 w-5 items-center justify-center rounded bg-indigo-600">
-              <svg width="10" height="10" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <path d="M1.5 3.5h11M1.5 7h7M1.5 10.5h9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-              </svg>
-            </div>
-            <span className="text-[13px] font-bold text-slate-300">harmonIQ</span>
-          </div>
-          <p className="text-[11px] text-slate-600">
-            AI-assisted CRM data readiness · V1 demo
-          </p>
-        </div>
-      </footer>
-
     </div>
   );
 }

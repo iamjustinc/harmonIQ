@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import type { AppScreen, IssueType, IssueStatus, ApprovedChange } from "@/lib/types";
 import {
   INITIAL_SCORE,
@@ -25,12 +25,15 @@ const INITIAL_STATUSES: Record<IssueType, IssueStatus> = {
   naming_format: "pending",
 };
 
-// ─── Demo workspace page ──────────────────────────────────────────────────────
-export default function DemoPage() {
-  const sampleLaunchHandled = useRef(false);
-  const [screen, setScreen] = useState<AppScreen>("upload");
-  const [fileName, setFileName] = useState("");
-  const [uploadedAt, setUploadedAt] = useState("");
+interface DemoWorkspaceProps {
+  initialSample?: boolean;
+}
+
+// ─── Demo workspace ──────────────────────────────────────────────────────────
+export default function DemoWorkspace({ initialSample = false }: DemoWorkspaceProps) {
+  const [screen, setScreen] = useState<AppScreen>(initialSample ? "profile" : "upload");
+  const [fileName, setFileName] = useState(initialSample ? DATASET_META.fileName : "");
+  const [uploadedAt, setUploadedAt] = useState(() => initialSample ? new Date().toISOString() : "");
   const [issueStatuses, setIssueStatuses] = useState<Record<IssueType, IssueStatus>>(INITIAL_STATUSES);
   const [approvedChanges, setApprovedChanges] = useState<ApprovedChange[]>([]);
   const [readinessScore, setReadinessScore] = useState(INITIAL_SCORE);
@@ -41,17 +44,6 @@ export default function DemoPage() {
     setUploadedAt(new Date().toISOString());
     setScreen("profile");
   }, []);
-
-  useEffect(() => {
-    if (sampleLaunchHandled.current) return;
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("sample") === "crm") {
-      sampleLaunchHandled.current = true;
-      handleAnalyze(DATASET_META.fileName);
-      window.history.replaceState(null, "", "/demo");
-    }
-  }, [handleAnalyze]);
 
   const handleBeginReview = useCallback(() => {
     const first = ISSUE_TYPE_ORDER.find(t => issueStatuses[t] === "pending") ?? ISSUE_TYPE_ORDER[0];

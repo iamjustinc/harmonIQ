@@ -72,6 +72,59 @@ button, a {
   transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms;
 }
 
+/* Landing hero text rotation */
+.hero-type-rotator {
+  position: relative;
+  display: inline-block;
+  width: 7.75rem;
+  height: 1.25rem;
+  overflow: hidden;
+  color: #4f46e5;
+}
+
+.hero-type-rotator span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: hero-type-cycle 12s infinite;
+}
+
+.hero-type-rotator span:nth-child(2) {
+  animation-delay: 3s;
+}
+
+.hero-type-rotator span:nth-child(3) {
+  animation-delay: 6s;
+}
+
+.hero-type-rotator span:nth-child(4) {
+  animation-delay: 9s;
+}
+
+@keyframes hero-type-cycle {
+  0%, 21% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  25%, 100% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-type-rotator span {
+    animation: none;
+    opacity: 0;
+    transform: none;
+  }
+
+  .hero-type-rotator span:first-child {
+    opacity: 1;
+  }
+}
+
 /* Upload analysis step entrance animation */
 @keyframes step-in {
   from { opacity: 0; transform: translateY(4px); }
