@@ -1,0 +1,68 @@
+record_id,account_name,domain,owner,segment,state,country,contact_name,email,phone
+REC-001,Northstar Health,northstarhealth.com,Noah Kim,Enterprise,CA,United States,Jordan Johnson,jordan.johnson@northstarhealth.com,(892) 858-9935
+REC-002,Zenith Labs,zenithlabs.com,Unassigned - Review,Enterprise,CA,United States,Logan Hall,logan@zenithlabs.com,(438) 617-1434
+REC-003,Altura Systems,alturasystems.com,Olivia Park,Enterprise,IL,United States,Sam Flores,sam.flores@alturasystems.com,(206) 877-3615
+REC-004,Greenline Bio,greenlinebio.com,Ava Thompson,Enterprise,WA,United States,Drew Johnson,drew.johnson@greenlinebio.com,(294) 489-2584
+REC-005,Orbitiq,orbitiq.ai,Sofia Martinez,Enterprise,TX,United States,Skyler Ward,skyler.ward@orbitiq.ai,(587) 180-5803
+REC-006,Corepath,corepath.io,Noah Kim,SMB,IL,United States,Skyler Morris,skyler.morris@corepath.io,(877) 333-5741
+REC-007,Sableworks,sableworks.com,Olivia Park,Needs Review,CA,United States,Casey Patel,casey.patel@sableworks.com,(366) 479-6820
+REC-008,Bluepeak Retail,bluepeakretail.com,Liam Carter,Needs Review,TX,United States,Jamie Wong,jamie@bluepeakretail.com,(367) 573-7216
+REC-009,Summitforge,summitforge.com,Ethan Brooks,Enterprise,TX,United States,Reese Martinez,reese.martinez@summitforge.com,(523) 510-5386
+REC-010,Meridianops,meridianops.com,Ethan Brooks,Needs Review,CA,United States,Sam Morris,smorris@meridianops.com,(858) 569-3340
+REC-011,Harborcloud,harborcloud.io,Unassigned - Review,SMB,TX,United States,Morgan Martinez,mmartinez@harborcloud.io,(797) 508-6930
+REC-012,Lumengrid,lumengrid.com,Lucas Rivera,Enterprise,NY,United States,Morgan Baker,morgan.baker@lumengrid.com,(356) 742-3621
+REC-013,Pinecrest Health,pinecresthealth.com,Olivia Park,Mid-Market,IL,United States,Harper Wong,harperwong@pinecresthealth.com,(766) 981-1188
+REC-014,Everfield Logistics,everfieldlogistics.com,Ethan Brooks,Enterprise,CA,United States,Reese Johnson,rjohnson@everfieldlogistics.com,(361) 564-1053
+REC-015,Asterpoint,asterpoint.com,Isabella Nguyen,Enterprise,TX,United States,Emerson Nguyen,emerson@asterpoint.com,(356) 482-3646
+REC-016,Maplestone Capital,maplestonecap.com,Liam Carter,Mid-Market,IL,United States,Emerson Lee,emerson.lee@maplestonecap.com,(314) 471-6038
+REC-017,Clearspring Media,clearspringmedia.com,Liam Carter,Enterprise,NY,United States,Ava Martinez,ava.martinez@clearspringmedia.com,(270) 878-9727
+REC-018,Verity Motors,veritymotors.com,Isabella Nguyen,Enterprise,NY,United States,Morgan Allen,mallen@veritymotors.com,(416) 652-4295
+REC-019,Northwind Foods,northwindfoods.com,Lucas Rivera,SMB,TX,United States,Cameron Turner,cameron.turner@northwindfoods.com,(453) 330-2049
+REC-020,Brightarc Education,brightarcedu.org,Isabella Nguyen,Enterprise,TX,United States,Jordan Morris,jordan.morris@brightarcedu.org,(272) 824-1964
+REC-021,Nimbus Telecom,nimbustelecom.com,Ethan Brooks,Needs Review,NY,United States,Chris Smith,chris.smith@nimbustelecom.com,(885) 597-4510
+REC-022,Cobalt Freight,cobaltfreight.com,Liam Carter,Mid-Market,IL,United States,Morgan Morris,mmorris@cobaltfreight.com,(616) 294-2545
+REC-023,Silveroak Health,silveroakhealth.com,Olivia Park,Mid-Market,CA,United States,Parker Turner,parker.turner@silveroakhealth.com,(889) 769-2612
+REC-024,Ironbridge Systems,ironbridgesys.com,Jordan Patel,Enterprise,CA,United States,Cameron Lopez,cameron@ironbridgesys.com,(749) 559-3296
+REC-025,Novavista Energy,novavistaenergy.com,Unassigned - Review,Enterprise,WA,United States,Riley Johnson,rjohnson@novavistaenergy.com,(763) 200-1828
+REC-026,Atlas Commerce,atlascommerce.com,Noah Kim,Enterprise,IL,United States,Jordan Wong,jwong@atlascommerce.com,(692) 318-7570
+REC-027,Heliowave,heliowave.com,Maya Chen,Mid-Market,CA,United States,Riley Clark,rclark@heliowave.com,(492) 533-8973
+REC-028,Redwood Biologics,redwoodbio.com,Noah Kim,Enterprise,NY,United States,Sam Davis,samdavis@redwoodbio.com,(258) 151-8811
+REC-029,Vectorlane,vectorlane.io,Maya Chen,SMB,IL,United States,Emerson Nguyen,emerson.nguyen@vectorlane.io,(270) 709-2113
+REC-030,Trunorth Security,trunorthsec.com,Liam Carter,Enterprise,NY,United States,Cameron Patel,cameron.patel@trunorthsec.com,(629) 773-9565
+REC-031,Golden Harbor Travel,goldenharbortravel.com,Unassigned - Review,Enterprise,TX,United States,Jamie Brooks,jbrooks@goldenharbortravel.com,(334) 787-5915
+REC-032,Cloudmosaic,cloudmosaic.io,Maya Chen,Mid-Market,IL,United States,Drew Wong,drew.wong@cloudmosaic.io,(750) 318-9288
+REC-033,Peakriver Finance,peakriverfin.com,Jordan Patel,Enterprise,TX,United States,Morgan Turner,morganturner@peakriverfin.com,(361) 548-9900
+REC-034,Bridgewell Care,bridgewellcare.com,Unassigned - Review,SMB,TX,United States,Harper Baker,harper.baker@bridgewellcare.com,(337) 370-2891
+REC-035,Stratus One,stratusone.com,Sofia Martinez,Mid-Market,TX,United States,Reese Kim,reesekim@stratusone.com,(408) 803-5325
+REC-036,Beacon Supply,beaconsupplyco.com,Unassigned - Review,Enterprise,IL,United States,Rowan Johnson,rowanjohnson@beaconsupplyco.com,(245) 103-6464
+REC-037,Westgate Health,westgatehealth.com,Lucas Rivera,SMB,NY,United States,Jamie Nguyen,jamie.nguyen@westgatehealth.com,(314) 177-3442
+REC-038,Urbannest Living,urbannestliving.com,Liam Carter,Needs Review,IL,United States,Ava Turner,aturner@urbannestliving.com,(330) 142-6050
+REC-039,Tidal Metrics,tidalmetrics.io,Noah Kim,SMB,TX,United States,Ava Turner,ava.turner@tidalmetrics.io,(562) 898-7658
+REC-040,Fieldstone Manufacturing,fieldstonemfg.com,Ava Thompson,Enterprise,NY,United States,Morgan Martinez,morgan.martinez@fieldstonemfg.com,(383) 854-6442
+REC-041,Arcbloom,arcbloom.com,Ava Thompson,SMB,WA,United States,Casey Johnson,cjohnson@arcbloom.com,(239) 979-8711
+REC-042,Praxis Medical,praxismedical.com,Ethan Brooks,Needs Review,NY,United States,Sam Young,sam@praxismedical.com,(224) 775-4164
+REC-043,Voltaris,voltaris.com,Jordan Patel,Mid-Market,TX,United States,Drew Johnson,djohnson@voltaris.com,(895) 963-9785
+REC-044,Oakline Systems,oaklinesystems.com,Unassigned - Review,Enterprise,TX,United States,Jordan Patel,jordan.patel@oaklinesystems.com,(311) 710-8119
+REC-045,Crescent Foods,crescentfoods.com,Liam Carter,SMB,IL,United States,Drew Hall,dhall@crescentfoods.com,(790) 294-5173
+REC-046,Truespan Networks,truespan.net,Isabella Nguyen,SMB,CA,United States,Parker Lee,parkerlee@truespan.net,(641) 171-6409
+REC-047,Mirapath,mirapath.com,Sofia Martinez,SMB,CA,United States,Drew Patel,dpatel@mirapath.com,(534) 512-5844
+REC-048,Skyledger,skyledger.io,Olivia Park,Needs Review,NY,United States,Morgan Brooks,morgan@skyledger.io,(830) 682-5930
+REC-049,Northgrove,northgrove.com,Sofia Martinez,Mid-Market,WA,United States,Reese Lee,rlee@northgrove.com,(793) 721-6279
+REC-050,Terrafleet,terrafleet.com,Noah Kim,SMB,WA,United States,Quinn Young,quinn@terrafleet.com,(874) 186-5649
+REC-051,Aquila Health,aquilahealth.com,Jordan Patel,Enterprise,IL,United States,Harper Lopez,harper@aquilahealth.com,(403) 250-1400
+REC-052,Primelayer,primelayer.io,Liam Carter,Needs Review,CA,United States,Casey Allen,callen@primelayer.io,(844) 689-4185
+REC-053,Summitrail,summitrail.com,Unassigned - Review,Enterprise,WA,United States,Rowan Clark,rowan.clark@summitrail.com,(997) 535-4585
+REC-054,Blueridge Labs,blueridgelabs.com,Maya Chen,SMB,NY,United States,Emerson Young,emerson.young@blueridgelabs.com,(667) 236-8612
+REC-055,Civicaxis,civicaxis.org,Ethan Brooks,Mid-Market,IL,United States,Reese Ward,rward@civicaxis.org,(362) 861-8777
+REC-056,Element Harbor,elementharbor.com,Sofia Martinez,SMB,WA,United States,Jamie Martinez,jamie@elementharbor.com,(481) 550-2269
+REC-057,Vantacore,vantacore.com,Ethan Brooks,Needs Review,TX,United States,Casey Johnson,casey@vantacore.com,(354) 336-7275
+REC-058,Brightfield,brightfieldag.com,Olivia Park,Mid-Market,NY,United States,Sam Wong,swong@brightfieldag.com,(625) 163-4388
+REC-059,Opentrail,opentrail.io,Maya Chen,SMB,NY,United States,Cameron Morris,cameron.morris@opentrail.io,(206) 460-5892
+REC-060,Signalforge,signalforge.com,Isabella Nguyen,SMB,WA,United States,Parker Flores,pflores@signalforge.com,(424) 379-8140
+REC-061,Granitecare,granitecare.com,Unassigned - Review,SMB,WA,United States,Jordan Clark,jordan@granitecare.com,(678) 230-9751
+REC-062,Echovista,echovista.co,Liam Carter,SMB,CA,United States,Cameron Morris,cameron.morris@echovista.co,(858) 538-3223
+REC-063,Deltabridge,deltabridge.com,Unassigned - Review,Mid-Market,TX,United States,Riley Smith,riley@deltabridge.com,(665) 434-6529
+REC-064,Rivermint,rivermint.com,Sofia Martinez,Enterprise,WA,United States,Jamie Hall,jamie.hall@rivermint.com,(967) 652-1853
+REC-065,Pureline Labs,purelinelabs.com,Maya Chen,Enterprise,TX,United States,Casey Wong,casey@purelinelabs.com,(220) 736-3496
+REC-066,North Harbor Tech,northharbortech.com,Jordan Patel,Needs Review,NY,United States,Morgan Allen,mallen@northharbortech.com,(916) 362-7043
+REC-067,Verdelink,verdelink.com,Unassigned - Review,Enterprise,NY,United States,Harper Ward,harper.ward@verdelink.com,(792) 126-6111

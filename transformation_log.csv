@@ -1,0 +1,152 @@
+log_id,record_id,issue_type,action_applied,old_value,new_value,risk_level,user_decision
+LOG-001,REC-001,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-002,REC-002,improper_naming_format,Normalized account name formatting,ZENITH LABS,Zenith Labs,Low,Accepted
+LOG-003,REC-002,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-004,REC-002,missing_owner_fields,Flagged owner for assignment,Unknown,Unassigned - Review,High,Accepted
+LOG-005,REC-003,invalid_email_formats,Corrected invalid email format,none@,sam.flores@alturasystems.com,Medium-High,Accepted
+LOG-006,REC-005,improper_naming_format,Normalized account name formatting,OrbitIQ,Orbitiq,Low,Accepted
+LOG-007,REC-006,improper_naming_format,Normalized account name formatting,CorePath,Corepath,Low,Accepted
+LOG-008,REC-006,inconsistent_state_values,Standardized state value,Illinois,IL,Medium,Accepted
+LOG-009,REC-007,improper_naming_format,Normalized account name formatting,SableWorks,Sableworks,Low,Accepted
+LOG-010,REC-007,missing_segment_fields,Flagged segment for review,,Needs Review,Medium-High,Accepted
+LOG-011,REC-007,invalid_email_formats,Corrected invalid email format,sam@,casey.patel@sableworks.com,Medium-High,Accepted
+LOG-012,REC-008,improper_naming_format,Normalized account name formatting,BluePeak Retail,Bluepeak Retail,Low,Accepted
+LOG-013,REC-008,inconsistent_state_values,Standardized state value,tex.,TX,Medium,Accepted
+LOG-014,REC-008,missing_segment_fields,Flagged segment for review,unknown,Needs Review,Medium-High,Accepted
+LOG-015,REC-009,improper_naming_format,Normalized account name formatting,SummitForge,Summitforge,Low,Accepted
+LOG-016,REC-009,inconsistent_state_values,Standardized state value,Texas,TX,Medium,Accepted
+LOG-017,REC-010,improper_naming_format,Normalized account name formatting,MeridianOps,Meridianops,Low,Accepted
+LOG-018,REC-010,missing_segment_fields,Flagged segment for review,unknown,Needs Review,Medium-High,Accepted
+LOG-019,REC-011,improper_naming_format,Normalized account name formatting,HarborCloud,Harborcloud,Low,Accepted
+LOG-020,REC-011,missing_owner_fields,Flagged owner for assignment,Unknown,Unassigned - Review,High,Accepted
+LOG-021,REC-012,improper_naming_format,Normalized account name formatting,LumenGrid,Lumengrid,Low,Accepted
+LOG-022,REC-012,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-023,REC-013,inconsistent_state_values,Standardized state value,ill.,IL,Medium,Accepted
+LOG-024,REC-014,improper_naming_format,Normalized account name formatting,EVERFIELD LOGISTICS,Everfield Logistics,Low,Accepted
+LOG-025,REC-015,improper_naming_format,Normalized account name formatting,AsterPoint,Asterpoint,Low,Accepted
+LOG-026,REC-016,improper_naming_format,Normalized account name formatting,MapleStone Capital,Maplestone Capital,Low,Accepted
+LOG-027,REC-017,improper_naming_format,Normalized account name formatting,ClearSpring Media,Clearspring Media,Low,Accepted
+LOG-028,REC-017,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-029,REC-017,invalid_email_formats,Corrected invalid email format,hello@northstarhealth,ava.martinez@clearspringmedia.com,Medium-High,Accepted
+LOG-030,REC-020,improper_naming_format,Normalized account name formatting,BrightArc Education,Brightarc Education,Low,Accepted
+LOG-031,REC-020,inconsistent_state_values,Standardized state value,Texas,TX,Medium,Accepted
+LOG-032,REC-021,inconsistent_state_values,Standardized state value,n.y.,NY,Medium,Accepted
+LOG-033,REC-021,missing_segment_fields,Flagged segment for review,unknown,Needs Review,Medium-High,Accepted
+LOG-034,REC-021,invalid_email_formats,Corrected invalid email format,chris.wong#mail.com,chris.smith@nimbustelecom.com,Medium-High,Accepted
+LOG-035,REC-022,inconsistent_state_values,Standardized state value,Illinois,IL,Medium,Accepted
+LOG-036,REC-023,improper_naming_format,Normalized account name formatting,SilverOak Health,Silveroak Health,Low,Accepted
+LOG-037,REC-024,improper_naming_format,Normalized account name formatting,IronBridge Systems,Ironbridge Systems,Low,Accepted
+LOG-038,REC-024,improper_naming_format,Normalized contact name formatting,cameron   LOPEZ,Cameron Lopez,Low,Accepted
+LOG-039,REC-024,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-040,REC-025,improper_naming_format,Normalized account name formatting,NovaVista Energy,Novavista Energy,Low,Accepted
+LOG-041,REC-025,inconsistent_state_values,Standardized state value,Washington,WA,Medium,Accepted
+LOG-042,REC-025,missing_owner_fields,Flagged owner for assignment,TBD,Unassigned - Review,High,Accepted
+LOG-043,REC-027,improper_naming_format,Normalized account name formatting,HelioWave,Heliowave,Low,Accepted
+LOG-044,REC-028,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-045,REC-029,improper_naming_format,Normalized account name formatting,VectorLane,Vectorlane,Low,Accepted
+LOG-046,REC-029,inconsistent_state_values,Standardized state value,Illinois,IL,Medium,Accepted
+LOG-047,REC-029,invalid_email_formats,Corrected invalid email format,riley.com,emerson.nguyen@vectorlane.io,Medium-High,Accepted
+LOG-048,REC-030,improper_naming_format,Normalized account name formatting,TruNorth Security,Trunorth Security,Low,Accepted
+LOG-049,REC-030,inconsistent_state_values,Standardized state value,n.y.,NY,Medium,Accepted
+LOG-050,REC-031,missing_owner_fields,Flagged owner for assignment,,Unassigned - Review,High,Accepted
+LOG-051,REC-032,improper_naming_format,Normalized account name formatting,CloudMosaic,Cloudmosaic,Low,Accepted
+LOG-052,REC-032,inconsistent_state_values,Standardized state value,ill.,IL,Medium,Accepted
+LOG-053,REC-033,improper_naming_format,Normalized account name formatting,PeakRiver Finance,Peakriver Finance,Low,Accepted
+LOG-054,REC-033,inconsistent_state_values,Standardized state value,Tex,TX,Medium,Accepted
+LOG-055,REC-034,missing_owner_fields,Flagged owner for assignment,,Unassigned - Review,High,Accepted
+LOG-056,REC-035,inconsistent_state_values,Standardized state value,tex.,TX,Medium,Accepted
+LOG-057,REC-036,missing_owner_fields,Flagged owner for assignment,Unknown,Unassigned - Review,High,Accepted
+LOG-058,REC-037,improper_naming_format,Normalized account name formatting,WESTGATE HEALTH,Westgate Health,Low,Accepted
+LOG-059,REC-038,improper_naming_format,Normalized account name formatting,UrbanNest Living,Urbannest Living,Low,Accepted
+LOG-060,REC-038,inconsistent_state_values,Standardized state value,Illinois,IL,Medium,Accepted
+LOG-061,REC-038,missing_segment_fields,Flagged segment for review,unknown,Needs Review,Medium-High,Accepted
+LOG-062,REC-039,inconsistent_state_values,Standardized state value,Texas,TX,Medium,Accepted
+LOG-063,REC-040,improper_naming_format,Normalized account name formatting,FieldStone Manufacturing,Fieldstone Manufacturing,Low,Accepted
+LOG-064,REC-040,inconsistent_state_values,Standardized state value,n.y.,NY,Medium,Accepted
+LOG-065,REC-041,improper_naming_format,Normalized account name formatting,ArcBloom,Arcbloom,Low,Accepted
+LOG-066,REC-041,inconsistent_state_values,Standardized state value,Washington,WA,Medium,Accepted
+LOG-067,REC-042,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-068,REC-042,missing_segment_fields,Flagged segment for review,,Needs Review,Medium-High,Accepted
+LOG-069,REC-043,inconsistent_state_values,Standardized state value,tex.,TX,Medium,Accepted
+LOG-070,REC-044,improper_naming_format,Normalized contact name formatting,jordan   PATEL,Jordan Patel,Low,Accepted
+LOG-071,REC-044,missing_owner_fields,Flagged owner for assignment,TBD,Unassigned - Review,High,Accepted
+LOG-072,REC-045,inconsistent_state_values,Standardized state value,ill.,IL,Medium,Accepted
+LOG-073,REC-046,improper_naming_format,Normalized account name formatting,TrueSpan Networks,Truespan Networks,Low,Accepted
+LOG-074,REC-046,inconsistent_state_values,Standardized state value,Cal,CA,Medium,Accepted
+LOG-075,REC-047,improper_naming_format,Normalized account name formatting,MiraPath,Mirapath,Low,Accepted
+LOG-076,REC-047,inconsistent_state_values,Standardized state value,calif.,CA,Medium,Accepted
+LOG-077,REC-048,improper_naming_format,Normalized account name formatting,SkyLedger,Skyledger,Low,Accepted
+LOG-078,REC-048,inconsistent_state_values,Standardized state value,New york,NY,Medium,Accepted
+LOG-079,REC-048,missing_segment_fields,Flagged segment for review,,Needs Review,Medium-High,Accepted
+LOG-080,REC-049,improper_naming_format,Normalized account name formatting,NorthGrove,Northgrove,Low,Accepted
+LOG-081,REC-049,inconsistent_state_values,Standardized state value,Washington,WA,Medium,Accepted
+LOG-082,REC-050,improper_naming_format,Normalized account name formatting,TerraFleet,Terrafleet,Low,Accepted
+LOG-083,REC-052,improper_naming_format,Normalized account name formatting,PrimeLayer,Primelayer,Low,Accepted
+LOG-084,REC-052,missing_segment_fields,Flagged segment for review,,Needs Review,Medium-High,Accepted
+LOG-085,REC-053,improper_naming_format,Normalized account name formatting,SummitRail,Summitrail,Low,Accepted
+LOG-086,REC-053,inconsistent_state_values,Standardized state value,Washington,WA,Medium,Accepted
+LOG-087,REC-053,missing_owner_fields,Flagged owner for assignment,TBD,Unassigned - Review,High,Accepted
+LOG-088,REC-054,improper_naming_format,Normalized account name formatting,BlueRidge Labs,Blueridge Labs,Low,Accepted
+LOG-089,REC-054,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-090,REC-055,improper_naming_format,Normalized account name formatting,CivicAxis,Civicaxis,Low,Accepted
+LOG-091,REC-055,inconsistent_state_values,Standardized state value,Ill,IL,Medium,Accepted
+LOG-092,REC-057,improper_naming_format,Normalized account name formatting,  vantacore  ,Vantacore,Low,Accepted
+LOG-093,REC-057,inconsistent_state_values,Standardized state value,Texas,TX,Medium,Accepted
+LOG-094,REC-057,missing_segment_fields,Flagged segment for review,,Needs Review,Medium-High,Accepted
+LOG-095,REC-058,improper_naming_format,Normalized account name formatting,BrightField,Brightfield,Low,Accepted
+LOG-096,REC-059,improper_naming_format,Normalized account name formatting,OpenTrail,Opentrail,Low,Accepted
+LOG-097,REC-059,inconsistent_state_values,Standardized state value,New york,NY,Medium,Accepted
+LOG-098,REC-059,invalid_email_formats,Corrected invalid email format,test,cameron.morris@opentrail.io,Medium-High,Accepted
+LOG-099,REC-060,improper_naming_format,Normalized account name formatting,SignalForge,Signalforge,Low,Accepted
+LOG-100,REC-060,inconsistent_state_values,Standardized state value,Washington,WA,Medium,Accepted
+LOG-101,REC-061,improper_naming_format,Normalized account name formatting,  granitecare  ,Granitecare,Low,Accepted
+LOG-102,REC-061,inconsistent_state_values,Standardized state value,Wash,WA,Medium,Accepted
+LOG-103,REC-061,missing_owner_fields,Flagged owner for assignment,TBD,Unassigned - Review,High,Accepted
+LOG-104,REC-062,improper_naming_format,Normalized account name formatting,  echovista  ,Echovista,Low,Accepted
+LOG-105,REC-062,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-106,REC-063,improper_naming_format,Normalized account name formatting,DeltaBridge,Deltabridge,Low,Accepted
+LOG-107,REC-063,inconsistent_state_values,Standardized state value,tex.,TX,Medium,Accepted
+LOG-108,REC-063,missing_owner_fields,Flagged owner for assignment,Unknown,Unassigned - Review,High,Accepted
+LOG-109,REC-064,improper_naming_format,Normalized account name formatting,RiverMint,Rivermint,Low,Accepted
+LOG-110,REC-065,improper_naming_format,Normalized account name formatting,PureLine Labs,Pureline Labs,Low,Accepted
+LOG-111,REC-065,inconsistent_state_values,Standardized state value,Texas,TX,Medium,Accepted
+LOG-112,REC-066,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-113,REC-066,missing_segment_fields,Flagged segment for review,unknown,Needs Review,Medium-High,Accepted
+LOG-114,REC-067,improper_naming_format,Normalized account name formatting,VerdeLink,Verdelink,Low,Accepted
+LOG-115,REC-067,missing_owner_fields,Flagged owner for assignment,,Unassigned - Review,High,Accepted
+LOG-116,REC-068,improper_naming_format,Normalized account name formatting,Northstar Health LLC,Northstar Health Llc,Low,Accepted
+LOG-117,REC-068,inconsistent_state_values,Standardized state value,Ill,IL,Medium,Accepted
+LOG-118,REC-068,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Northstar Health Llc,Excluded as duplicate,High,Accepted
+LOG-119,REC-069,improper_naming_format,Normalized account name formatting,NORTHSTAR HEALTH,Northstar Health,Low,Accepted
+LOG-120,REC-069,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-121,REC-069,invalid_email_formats,Corrected invalid email format,ava@acme,taylor.davis@northstarhealth.com,Medium-High,Accepted
+LOG-122,REC-069,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Northstar Health,Excluded as duplicate,High,Accepted
+LOG-123,REC-070,improper_naming_format,Normalized account name formatting,SableWorks Inc,Sableworks Inc,Low,Accepted
+LOG-124,REC-070,missing_owner_fields,Flagged owner for assignment,,Unassigned - Review,High,Accepted
+LOG-125,REC-070,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Sableworks Inc,Excluded as duplicate,High,Accepted
+LOG-126,REC-071,inconsistent_state_values,Standardized state value,tex.,TX,Medium,Accepted
+LOG-127,REC-071,duplicate_account_records,Marked as duplicate and excluded from cleaned export,"SableWorks, Inc.",Excluded as duplicate,High,Accepted
+LOG-128,REC-072,improper_naming_format,Normalized account name formatting,LumenGrid Inc,Lumengrid Inc,Low,Accepted
+LOG-129,REC-072,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-130,REC-072,missing_owner_fields,Flagged owner for assignment,TBD,Unassigned - Review,High,Accepted
+LOG-131,REC-072,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Lumengrid Inc,Excluded as duplicate,High,Accepted
+LOG-132,REC-073,improper_naming_format,Normalized account name formatting,LumenGrid LLC,Lumengrid Llc,Low,Accepted
+LOG-133,REC-073,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-134,REC-073,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Lumengrid Llc,Excluded as duplicate,High,Accepted
+LOG-135,REC-074,improper_naming_format,Normalized account name formatting,NORTHWIND FOODS LLC,Northwind Foods Llc,Low,Accepted
+LOG-136,REC-074,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Northwind Foods Llc,Excluded as duplicate,High,Accepted
+LOG-137,REC-075,improper_naming_format,Normalized account name formatting,Northwind Foods LLC,Northwind Foods Llc,Low,Accepted
+LOG-138,REC-075,inconsistent_state_values,Standardized state value,New york,NY,Medium,Accepted
+LOG-139,REC-075,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Northwind Foods Llc,Excluded as duplicate,High,Accepted
+LOG-140,REC-076,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-141,REC-076,invalid_email_formats,Corrected invalid email format,jordan.leecompany.com,casey.wong@redwoodbio.com,Medium-High,Accepted
+LOG-142,REC-076,duplicate_account_records,Marked as duplicate and excluded from cleaned export,"Redwood Biologics, Inc.",Excluded as duplicate,High,Accepted
+LOG-143,REC-077,improper_naming_format,Normalized account name formatting,Redwood Biologics LLC,Redwood Biologics Llc,Low,Accepted
+LOG-144,REC-077,inconsistent_state_values,Standardized state value,New York,NY,Medium,Accepted
+LOG-145,REC-077,missing_owner_fields,Flagged owner for assignment,,Unassigned - Review,High,Accepted
+LOG-146,REC-077,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Redwood Biologics Llc,Excluded as duplicate,High,Accepted
+LOG-147,REC-078,inconsistent_state_values,Standardized state value,New york,NY,Medium,Accepted
+LOG-148,REC-078,duplicate_account_records,Marked as duplicate and excluded from cleaned export,"Stratus One, Inc.",Excluded as duplicate,High,Accepted
+LOG-149,REC-079,improper_naming_format,Normalized account name formatting,STRATUS ONE,Stratus One,Low,Accepted
+LOG-150,REC-079,inconsistent_state_values,Standardized state value,California,CA,Medium,Accepted
+LOG-151,REC-079,duplicate_account_records,Marked as duplicate and excluded from cleaned export,Stratus One,Excluded as duplicate,High,Accepted

@@ -1,0 +1,33 @@
+{
+  "dataset_name": "Routing Readiness CRM Export",
+  "row_count_before": 79,
+  "row_count_after": 67,
+  "column_count": 10,
+  "issue_counts_before": {
+    "missing_owner_fields": 14,
+    "duplicate_account_records": 12,
+    "invalid_email_formats": 8,
+    "inconsistent_state_values": 51,
+    "missing_segment_fields": 10
+  },
+  "issue_counts_after": {
+    "missing_owner_fields": 0,
+    "duplicate_account_records": 0,
+    "invalid_email_formats": 0,
+    "inconsistent_state_values": 0,
+    "missing_segment_fields": 0
+  },
+  "readiness_score_before": 35,
+  "readiness_score_after": 100,
+  "workflow_readiness_summary": {
+    "routing": "Improved after owner gaps were flagged and duplicate records were removed from the cleaned export.",
+    "reporting": "Improved after duplicate clusters and naming inconsistencies were normalized.",
+    "segmentation": "Improved after state values were standardized and missing segment values were flagged for review."
+  },
+  "generated_files": [
+    "messy_crm_export.csv",
+    "cleaned_crm_export.csv",
+    "transformation_log.csv",
+    "dataset_summary.json"
+  ]
+}

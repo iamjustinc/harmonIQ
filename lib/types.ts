@@ -1,0 +1,133 @@
+// ─── Core Data Types ───────────────────────────────────────────────────────
+
+export interface CRMRecord {
+  record_id: string;
+  account_name: string;
+  domain: string;
+  owner: string;
+  segment: string;
+  state: string;
+  country: string;
+  contact_name: string;
+  email: string;
+  phone: string;
+  harmoniq_review_status?: string;
+  harmoniq_schema_notes?: string;
+}
+
+// ─── App Navigation ────────────────────────────────────────────────────────
+
+export type AppScreen = "upload" | "profile" | "review" | "results";
+
+export type StepStatus = "pending" | "current" | "complete";
+
+// ─── Issue Types ───────────────────────────────────────────────────────────
+
+export type IssueType =
+  | "missing_owner"
+  | "duplicate_accounts"
+  | "invalid_email"
+  | "missing_segment"
+  | "inconsistent_state"
+  | "schema_mismatch"
+  | "naming_format";
+
+export type IssueSeverity = "blocking" | "high" | "medium-high" | "medium" | "low-medium" | "low";
+
+export type IssueStatus = "pending" | "approved" | "skipped";
+
+// ─── Issue Detection Results ────────────────────────────────────────────────
+
+export interface MissingOwnerRecord {
+  record: CRMRecord;
+  ownerValue: string; // "", "TBD", "Unknown", etc.
+}
+
+export interface DuplicateCluster {
+  domain: string;
+  records: CRMRecord[];
+  confidence: number; // 0-100
+  canonicalRecord?: CRMRecord; // suggested primary
+}
+
+export interface InvalidEmailRecord {
+  record: CRMRecord;
+  emailValue: string;
+  reason: string; // "missing @", "no TLD", "placeholder", etc.
+  suggestedValue?: string;
+}
+
+export interface InconsistentStateRecord {
+  record: CRMRecord;
+  currentValue: string;
+  standardValue: string; // 2-letter code
+}
+
+export interface MissingSegmentRecord {
+  record: CRMRecord;
+  segmentValue: string;
+}
+
+export interface NamingFormatRecord {
+  record: CRMRecord;
+  field: "account_name" | "contact_name";
+  currentValue: string;
+  suggestedValue: string;
+  reason: string;
+}
+
+export interface SchemaMismatchRecord {
+  scope: "field" | "column";
+  source: string;
+  expected: string;
+  reason: string;
+  impact: string;
+}
+
+// ─── Issue Definition (for UI display) ─────────────────────────────────────
+
+export interface IssueDefinition {
+  type: IssueType;
+  title: string;
+  severity: IssueSeverity;
+  category: "Routing" | "Records" | "Outreach" | "Segmentation" | "Standardization" | "Schema";
+  recordCount: number;
+  businessImpact: string;       // short label for the card
+  workflowLabel: string;        // e.g. "Blocking Routing"
+  confidence: number;           // 0-100
+  priorityReason: string;       // why it ranks where it does
+  reviewMode: string;           // review-first, deterministic, cluster review, etc.
+  whyItMatters: string;         // paragraph for the review panel
+  suggestedAction: string;      // plain-English recommendation
+  riskLevel: "High" | "Medium-High" | "Medium" | "Low";
+  downstreamImplication: string;
+  canBatchAccept: boolean;      // for "Accept All Low-Risk" button
+  readinessImpact: number;      // score points gained by approving
+}
+
+// ─── Approved Changes ──────────────────────────────────────────────────────
+
+export interface ApprovedChange {
+  changeId: string;
+  recordId: string;
+  accountName: string;
+  field: string;
+  before: string;
+  after: string;
+  issueType: IssueType;
+  timestamp: string;
+  riskLevel: "High" | "Medium-High" | "Medium" | "Low";
+  userDecision: "Accepted" | "Rejected" | "Flagged";
+}
+
+// ─── App State ─────────────────────────────────────────────────────────────
+
+export interface AppState {
+  screen: AppScreen;
+  fileName: string;
+  uploadedAt: string;
+  issueStatuses: Record<IssueType, IssueStatus>;
+  approvedChanges: ApprovedChange[];
+  readinessScore: number;
+  activeIssueType: IssueType;
+}
