@@ -36,11 +36,62 @@ export type IssueSeverity = "blocking" | "high" | "medium-high" | "medium" | "lo
 
 export type IssueStatus = "pending" | "approved" | "skipped";
 
+// ─── Workflow Readiness Modes ──────────────────────────────────────────────
+
+export type WorkflowMode =
+  | "lead_routing"
+  | "campaign_launch"
+  | "quarterly_reporting"
+  | "account_segmentation"
+  | "enrichment_import"
+  | "territory_planning";
+
+export interface WorkflowModeDefinition {
+  mode: WorkflowMode;
+  label: string;
+  shortLabel: string;
+  readinessNoun: string;
+  description: string;
+  primaryRisk: string;
+}
+
+export interface WorkflowImpactMetric {
+  label: string;
+  value: number;
+  unit: string;
+  detail: string;
+  issueTypes: IssueType[];
+  severity: IssueSeverity;
+}
+
+export interface WorkflowIssueOverride {
+  type: IssueType;
+  priority?: number;
+  businessImpact?: string;
+  workflowLabel?: string;
+  priorityReason?: string;
+  downstreamImplication?: string;
+  readinessImpact?: number;
+}
+
+// ─── Reviewable Resolution Suggestions ─────────────────────────────────────
+
+export type SuggestionReviewState = "needs_approval" | "review_required" | "deterministic";
+
+export interface ResolutionSuggestion {
+  field: "owner" | "segment" | "state" | "country" | "lifecycle_stage" | "email" | "schema_mapping";
+  suggestedValue: string;
+  confidence: number;
+  rationale: string;
+  reviewState: SuggestionReviewState;
+}
+
 // ─── Issue Detection Results ────────────────────────────────────────────────
 
 export interface MissingOwnerRecord {
   record: CRMRecord;
   ownerValue: string; // "", "TBD", "Unknown", etc.
+  suggestion: ResolutionSuggestion;
 }
 
 export interface DuplicateCluster {
@@ -55,17 +106,20 @@ export interface InvalidEmailRecord {
   emailValue: string;
   reason: string; // "missing @", "no TLD", "placeholder", etc.
   suggestedValue?: string;
+  suggestion?: ResolutionSuggestion;
 }
 
 export interface InconsistentStateRecord {
   record: CRMRecord;
   currentValue: string;
   standardValue: string; // 2-letter code
+  suggestion: ResolutionSuggestion;
 }
 
 export interface MissingSegmentRecord {
   record: CRMRecord;
   segmentValue: string;
+  suggestion: ResolutionSuggestion;
 }
 
 export interface NamingFormatRecord {
@@ -82,6 +136,7 @@ export interface SchemaMismatchRecord {
   expected: string;
   reason: string;
   impact: string;
+  suggestion?: ResolutionSuggestion;
 }
 
 // ─── Issue Definition (for UI display) ─────────────────────────────────────
@@ -130,4 +185,5 @@ export interface AppState {
   approvedChanges: ApprovedChange[];
   readinessScore: number;
   activeIssueType: IssueType;
+  workflowMode: WorkflowMode;
 }

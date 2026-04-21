@@ -1,7 +1,8 @@
 "use client";
 
-import type { AppScreen, IssueType, IssueStatus } from "@/lib/types";
+import type { AppScreen, IssueType, IssueStatus, WorkflowMode } from "@/lib/types";
 import { ISSUE_DEFINITIONS } from "@/lib/issueDetection";
+import { WORKFLOW_MODES } from "@/lib/workflows";
 
 type NavigableScreen = "upload" | "profile" | "review" | "results";
 
@@ -10,6 +11,7 @@ interface SidebarProps {
   fileName: string;
   readinessScore: number;
   issueStatuses: Record<IssueType, IssueStatus>;
+  workflowMode?: WorkflowMode;
   onNavigate?: (screen: NavigableScreen) => void;
 }
 
@@ -25,10 +27,11 @@ const SCORE_COLOR = (s: number) =>
 
 const STEP_ORDER: AppScreen[] = ["upload", "profile", "review", "results"];
 
-export default function Sidebar({ screen, fileName, readinessScore, issueStatuses, onNavigate }: SidebarProps) {
+export default function Sidebar({ screen, fileName, readinessScore, issueStatuses, workflowMode, onNavigate }: SidebarProps) {
   const currentIdx = STEP_ORDER.indexOf(screen);
   const reviewedCount = Object.values(issueStatuses).filter(s => s !== "pending").length;
   const totalIssues = ISSUE_DEFINITIONS.length;
+  const workflow = workflowMode ? WORKFLOW_MODES[workflowMode] : null;
 
   // Mini circular arc SVG
   const r = 20, circ = 2 * Math.PI * r;
@@ -105,7 +108,9 @@ export default function Sidebar({ screen, fileName, readinessScore, issueStatuse
       {/* Readiness score mini widget */}
       {(screen === "profile" || screen === "review" || screen === "results") && (
         <div className="mx-3 mb-3 rounded-lg border border-slate-700/50 bg-slate-800/60 p-3">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Readiness Score</p>
+          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            {workflow ? workflow.shortLabel : "Readiness"} Score
+          </p>
           <div className="flex items-center gap-3">
             {/* Mini gauge */}
             <svg width="48" height="48" viewBox="0 0 48 48">
@@ -136,6 +141,11 @@ export default function Sidebar({ screen, fileName, readinessScore, issueStatuse
               </p>
             </div>
           </div>
+          {workflow ? (
+            <div className="mt-2 rounded border border-slate-700 bg-slate-900/50 px-2 py-1.5">
+              <p className="text-[10px] font-semibold text-slate-400">Mode: {workflow.label}</p>
+            </div>
+          ) : null}
         </div>
       )}
 

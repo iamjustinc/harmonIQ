@@ -1,13 +1,15 @@
 "use client";
 
-import type { IssueStatus, IssueType } from "@/lib/types";
+import type { IssueStatus, IssueType, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
-import { DETECTED, generateChanges, ISSUE_DEFINITIONS } from "@/lib/issueDetection";
+import { DETECTED, generateChanges } from "@/lib/issueDetection";
+import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
 import Sidebar from "./Sidebar";
 import {
   ConfidenceDots,
   DiffCell,
   DownstreamBox,
+  ImpactMetricCard,
   IssueQueueItem,
   RationaleBlock,
   ScoreImpactBox,
@@ -15,13 +17,16 @@ import {
   StatusPill,
   StickyDatasetHeader,
   WorkflowLabel,
+  WorkflowModeSelector,
 } from "./harmoniq-ui";
 
 interface ReviewScreenProps {
   fileName: string;
   issueStatuses: Record<IssueType, IssueStatus>;
   readinessScore: number;
+  workflowMode: WorkflowMode;
   activeIssueType: IssueType;
+  onWorkflowModeChange: (mode: WorkflowMode) => void;
   onApprove: (issueType: IssueType, changes: ApprovedChange[]) => void;
   onSkip: (issueType: IssueType) => void;
   onUndo: (issueType: IssueType) => void;
@@ -35,8 +40,10 @@ type FlagRow = {
   scope: string;
   current: string;
   issue: string;
-  recommendation: string;
-  trustCue: string;
+  suggestedValue: string;
+  confidence: number;
+  rationale: string;
+  reviewState: string;
 };
 
 type DiffRow = {
@@ -48,19 +55,33 @@ type DiffRow = {
   basis: string;
 };
 
-function getDefinition(type: IssueType) {
-  return ISSUE_DEFINITIONS.find((definition) => definition.type === type)!;
+function suggestionStateLabel(suggestion: ResolutionSuggestion): string {
+  if (suggestion.reviewState === "deterministic") return "Deterministic";
+  if (suggestion.reviewState === "needs_approval") return "Needs approval";
+  return "Review required";
+}
+
+function fallbackSuggestion(field: ResolutionSuggestion["field"], suggestedValue: string, rationale: string): ResolutionSuggestion {
+  return {
+    field,
+    suggestedValue,
+    confidence: 62,
+    rationale,
+    reviewState: "review_required",
+  };
 }
 
 function getFlagRows(type: IssueType): FlagRow[] {
   if (type === "missing_owner") {
-    return DETECTED.missingOwner.map(({ record, ownerValue }) => ({
+    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => ({
       id: record.record_id,
       scope: `${record.record_id} - ${record.account_name.trim()}`,
       current: ownerValue || "(blank)",
       issue: "Owner cannot be used for routing.",
-      recommendation: "Set owner to Unassigned - Review.",
-      trustCue: "Review-first; no owner is inferred.",
+      suggestedValue: suggestion.suggestedValue,
+      confidence: suggestion.confidence,
+      rationale: suggestion.rationale,
+      reviewState: suggestionStateLabel(suggestion),
     }));
   }
 
@@ -70,19 +91,25 @@ function getFlagRows(type: IssueType): FlagRow[] {
       scope: `${record.record_id} - ${record.contact_name}`,
       current: emailValue || "(blank)",
       issue: reason,
-      recommendation: suggestedValue ? `Correct to ${suggestedValue}` : "Flag for manual correction.",
-      trustCue: suggestedValue ? "Obvious syntax repair found." : "No safe correction inferred.",
+      suggestedValue: suggestedValue ?? "Flag for manual correction",
+      confidence: suggestedValue ? 91 : 48,
+      rationale: suggestedValue
+        ? "Obvious syntax repair matches the account domain and keeps the correction reviewable."
+        : "No safe correction is available from the current fields.",
+      reviewState: suggestedValue ? "Needs approval" : "Review required",
     }));
   }
 
   if (type === "missing_segment") {
-    return DETECTED.missingSegments.map(({ record, segmentValue }) => ({
+    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => ({
       id: record.record_id,
       scope: `${record.record_id} - ${record.account_name.trim()}`,
       current: segmentValue || "(blank)",
       issue: "Segment is unavailable for planning and routing rules.",
-      recommendation: "Flag segment for business review.",
-      trustCue: "Review-first; no segment is inferred.",
+      suggestedValue: suggestion.suggestedValue,
+      confidence: suggestion.confidence,
+      rationale: suggestion.rationale,
+      reviewState: suggestionStateLabel(suggestion),
     }));
   }
 
@@ -92,8 +119,10 @@ function getFlagRows(type: IssueType): FlagRow[] {
       scope: `${item.scope}: ${item.source}`,
       current: item.source,
       issue: item.reason,
-      recommendation: `Map to ${item.expected}.`,
-      trustCue: item.impact,
+      suggestedValue: item.suggestion?.suggestedValue ?? `Map to ${item.expected}`,
+      confidence: item.suggestion?.confidence ?? 93,
+      rationale: item.suggestion?.rationale ?? item.impact,
+      reviewState: item.suggestion ? suggestionStateLabel(item.suggestion) : "Deterministic",
     }));
   }
 
@@ -102,13 +131,13 @@ function getFlagRows(type: IssueType): FlagRow[] {
 
 function getDiffRows(type: IssueType): DiffRow[] {
   if (type === "inconsistent_state") {
-    return DETECTED.inconsistentStates.map(({ record, currentValue, standardValue }) => ({
+    return DETECTED.inconsistentStates.map(({ record, currentValue, standardValue, suggestion }) => ({
       id: `${record.record_id}-state`,
       account: record.account_name.trim(),
       field: "state",
       before: currentValue,
       after: standardValue,
-      basis: "USPS two-letter state normalization.",
+      basis: `${suggestion.confidence}% confidence - ${suggestion.rationale}`,
     }));
   }
 
@@ -126,16 +155,27 @@ function getDiffRows(type: IssueType): DiffRow[] {
   return [];
 }
 
+function getSuggestionPreview(type: IssueType): ResolutionSuggestion | null {
+  if (type === "missing_owner") return DETECTED.missingOwner[0]?.suggestion ?? null;
+  if (type === "missing_segment") return DETECTED.missingSegments[0]?.suggestion ?? null;
+  if (type === "inconsistent_state") return DETECTED.inconsistentStates[0]?.suggestion ?? null;
+  if (type === "invalid_email") return DETECTED.invalidEmails.find((item) => item.suggestion)?.suggestion
+    ?? fallbackSuggestion("email", "Flag for correction", "Some invalid emails cannot be corrected safely from available fields.");
+  if (type === "schema_mismatch") return DETECTED.schemaMismatches.find((item) => item.suggestion)?.suggestion
+    ?? fallbackSuggestion("schema_mapping", "Confirm mapping", "Source-to-canonical field mapping is visible for review.");
+  return null;
+}
+
 function FlagTable({ issueType }: { issueType: IssueType }) {
   const rows = getFlagRows(issueType);
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-slate-50">
             <tr className="border-b border-slate-200">
-              {["Scope", "Current value", "Issue", "Recommended handling", "Trust cue"].map((heading) => (
+              {["Scope", "Current value", "Candidate fill", "Confidence", "Rationale", "Review state"].map((heading) => (
                 <th key={heading} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   {heading}
                 </th>
@@ -149,9 +189,17 @@ function FlagTable({ issueType }: { issueType: IssueType }) {
                 <td className="px-3 py-3">
                   <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{row.current}</span>
                 </td>
-                <td className="px-3 py-3 text-xs text-slate-600">{row.issue}</td>
-                <td className="px-3 py-3 text-xs font-semibold text-slate-800">{row.recommendation}</td>
-                <td className="px-3 py-3 text-xs text-slate-500">{row.trustCue}</td>
+                <td className="px-3 py-3 text-xs font-semibold text-slate-800">{row.suggestedValue}</td>
+                <td className="px-3 py-3">
+                  <ConfidenceDots pct={row.confidence} />
+                </td>
+                <td className="px-3 py-3 text-xs leading-relaxed text-slate-600">{row.rationale}</td>
+                <td className="px-3 py-3">
+                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
+                    {row.reviewState}
+                  </span>
+                  <p className="mt-1 text-[11px] text-slate-400">{row.issue}</p>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -281,7 +329,9 @@ export default function ReviewScreen({
   fileName,
   issueStatuses,
   readinessScore,
+  workflowMode,
   activeIssueType,
+  onWorkflowModeChange,
   onApprove,
   onSkip,
   onUndo,
@@ -289,10 +339,14 @@ export default function ReviewScreen({
   onFinish,
   onNavigate,
 }: ReviewScreenProps) {
-  const definition = getDefinition(activeIssueType);
+  const workflow = WORKFLOW_MODES[workflowMode];
+  const definitions = getWorkflowIssueDefinitions(workflowMode);
+  const definition = definitions.find((item) => item.type === activeIssueType) ?? definitions[0];
+  const suggestionPreview = getSuggestionPreview(activeIssueType);
+  const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
-  const allReviewed = reviewedCount === ISSUE_DEFINITIONS.length;
+  const allReviewed = reviewedCount === definitions.length;
 
   const approveCurrentIssue = () => {
     onApprove(activeIssueType, generateChanges(activeIssueType));
@@ -305,6 +359,7 @@ export default function ReviewScreen({
         fileName={fileName}
         readinessScore={readinessScore}
         issueStatuses={issueStatuses}
+        workflowMode={workflowMode}
         onNavigate={onNavigate}
       />
 
@@ -312,22 +367,22 @@ export default function ReviewScreen({
         <div className="border-b border-slate-200 px-4 py-4">
           <h2 className="text-sm font-black text-slate-950">Issue Queue</h2>
           <div className="mt-1 flex items-center justify-between gap-2">
-            <p className="text-xs text-slate-500">{reviewedCount} of {ISSUE_DEFINITIONS.length} reviewed</p>
+            <p className="text-xs text-slate-500">{reviewedCount} of {definitions.length} reviewed</p>
             {reviewedCount > 0 && (
               <span className="text-[11px] font-bold text-slate-400">
-                {Math.round((reviewedCount / ISSUE_DEFINITIONS.length) * 100)}%
+                {Math.round((reviewedCount / definitions.length) * 100)}%
               </span>
             )}
           </div>
           <div className="mt-2.5 h-1 rounded-full bg-slate-100">
             <div
               className="h-full rounded-full bg-indigo-500 transition-all duration-300"
-              style={{ width: `${(reviewedCount / ISSUE_DEFINITIONS.length) * 100}%` }}
+              style={{ width: `${(reviewedCount / definitions.length) * 100}%` }}
             />
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto py-2">
-          {ISSUE_DEFINITIONS.map((item) => (
+          {definitions.map((item) => (
             <IssueQueueItem
               key={item.type}
               definition={item}
@@ -356,7 +411,7 @@ export default function ReviewScreen({
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title={definition.title}
-          subtitle={`${definition.recordCount} findings · ${definition.businessImpact}`}
+          subtitle={`${definition.recordCount} findings · ${workflow.label} · ${definition.businessImpact}`}
           badge={
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={definition.severity} />
@@ -364,12 +419,30 @@ export default function ReviewScreen({
               <StatusPill status={status} />
             </div>
           }
+          actions={<WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />}
         />
 
         <div className="space-y-4 px-6 py-5">
-          <RationaleBlock title="Why this ranks here">
+          <RationaleBlock title={`Why this ranks for ${workflow.shortLabel}`}>
             <p>{definition.priorityReason}</p>
           </RationaleBlock>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-black text-slate-950">Downstream Impact Simulator</h2>
+                <p className="mt-1 text-xs text-slate-500">{workflow.primaryRisk}</p>
+              </div>
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                {workflow.label}
+              </span>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-3">
+              {impactMetrics.map((metric) => (
+                <ImpactMetricCard key={metric.label} metric={metric} />
+              ))}
+            </div>
+          </section>
 
           <section className="rounded-lg border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
@@ -397,7 +470,7 @@ export default function ReviewScreen({
             </div>
             <h2 className="text-sm font-black text-slate-950">Analysis &amp; Recommendation</h2>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">Deterministic analysis · human approval required</p>
+          <p className="mt-1 text-[11px] text-slate-400">{workflow.label} mode · human approval required</p>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -415,6 +488,18 @@ export default function ReviewScreen({
             <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk level</p>
             <SeverityBadge severity={definition.severity} />
           </section>
+
+          {suggestionPreview ? (
+            <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Missing-value suggestion</p>
+              <p className="mt-2 text-sm font-black text-indigo-950">{suggestionPreview.suggestedValue}</p>
+              <div className="mt-2">
+                <ConfidenceDots pct={suggestionPreview.confidence} />
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-indigo-900">{suggestionPreview.rationale}</p>
+              <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
+            </section>
+          ) : null}
 
           <section>
             <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Rationale</p>

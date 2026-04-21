@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import type { AppScreen, IssueType, IssueStatus, ApprovedChange } from "@/lib/types";
+import type { AppScreen, IssueType, IssueStatus, ApprovedChange, WorkflowMode } from "@/lib/types";
 import {
   INITIAL_SCORE,
-  calculateScore,
-  ISSUE_TYPE_ORDER,
 } from "@/lib/issueDetection";
+import {
+  calculateWorkflowScore,
+  DEFAULT_WORKFLOW_MODE,
+  getWorkflowIssueOrder,
+} from "@/lib/workflows";
 import { DATASET_META } from "@/lib/data";
 
 import UploadScreen from "@/components/UploadScreen";
@@ -37,7 +40,8 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   const [issueStatuses, setIssueStatuses] = useState<Record<IssueType, IssueStatus>>(INITIAL_STATUSES);
   const [approvedChanges, setApprovedChanges] = useState<ApprovedChange[]>([]);
   const [readinessScore, setReadinessScore] = useState(INITIAL_SCORE);
-  const [activeIssueType, setActiveIssueType] = useState<IssueType>(ISSUE_TYPE_ORDER[0]);
+  const [workflowMode, setWorkflowMode] = useState<WorkflowMode>(DEFAULT_WORKFLOW_MODE);
+  const [activeIssueType, setActiveIssueType] = useState<IssueType>(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
 
   const handleAnalyze = useCallback((name: string) => {
     setFileName(name);
@@ -46,34 +50,44 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   }, []);
 
   const handleBeginReview = useCallback(() => {
-    const first = ISSUE_TYPE_ORDER.find(t => issueStatuses[t] === "pending") ?? ISSUE_TYPE_ORDER[0];
+    const order = getWorkflowIssueOrder(workflowMode);
+    const first = order.find(t => issueStatuses[t] === "pending") ?? order[0];
     setActiveIssueType(first);
     setScreen("review");
+  }, [issueStatuses, workflowMode]);
+
+  const handleWorkflowModeChange = useCallback((mode: WorkflowMode) => {
+    setWorkflowMode(mode);
+    setReadinessScore(calculateWorkflowScore(issueStatuses, mode));
+    setActiveIssueType((current) => {
+      const order = getWorkflowIssueOrder(mode);
+      return order.includes(current) ? current : order[0];
+    });
   }, [issueStatuses]);
 
   const handleApprove = useCallback((issueType: IssueType, changes: ApprovedChange[]) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "approved" as IssueStatus };
     setIssueStatuses(nextStatuses);
-    setReadinessScore(calculateScore(nextStatuses));
+    setReadinessScore(calculateWorkflowScore(nextStatuses, workflowMode));
     setApprovedChanges(prev => [...prev, ...changes]);
-    const nextIssue = ISSUE_TYPE_ORDER.find(t => t !== issueType && nextStatuses[t] === "pending");
+    const nextIssue = getWorkflowIssueOrder(workflowMode).find(t => t !== issueType && nextStatuses[t] === "pending");
     if (nextIssue) setActiveIssueType(nextIssue);
-  }, [issueStatuses]);
+  }, [issueStatuses, workflowMode]);
 
   const handleSkip = useCallback((issueType: IssueType) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "skipped" as IssueStatus };
     setIssueStatuses(nextStatuses);
-    const nextIssue = ISSUE_TYPE_ORDER.find(t => t !== issueType && nextStatuses[t] === "pending");
+    const nextIssue = getWorkflowIssueOrder(workflowMode).find(t => t !== issueType && nextStatuses[t] === "pending");
     if (nextIssue) setActiveIssueType(nextIssue);
-  }, [issueStatuses]);
+  }, [issueStatuses, workflowMode]);
 
   const handleUndo = useCallback((issueType: IssueType) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "pending" as IssueStatus };
     setIssueStatuses(nextStatuses);
-    setReadinessScore(calculateScore(nextStatuses));
+    setReadinessScore(calculateWorkflowScore(nextStatuses, workflowMode));
     setApprovedChanges(prev => prev.filter(c => c.issueType !== issueType));
     setActiveIssueType(issueType);
-  }, [issueStatuses]);
+  }, [issueStatuses, workflowMode]);
 
   const handleSelectIssue = useCallback((issueType: IssueType) => {
     setActiveIssueType(issueType);
@@ -90,7 +104,8 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
     setIssueStatuses(INITIAL_STATUSES);
     setApprovedChanges([]);
     setReadinessScore(INITIAL_SCORE);
-    setActiveIssueType(ISSUE_TYPE_ORDER[0]);
+    setWorkflowMode(DEFAULT_WORKFLOW_MODE);
+    setActiveIssueType(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
   }, []);
 
   const handleNavigate = useCallback((s: "upload" | "profile" | "review" | "results") => {
@@ -108,6 +123,8 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
         uploadedAt={uploadedAt}
         issueStatuses={issueStatuses}
         readinessScore={readinessScore}
+        workflowMode={workflowMode}
+        onWorkflowModeChange={handleWorkflowModeChange}
         onBeginReview={handleBeginReview}
         onNavigate={handleNavigate}
       />
@@ -120,7 +137,9 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
         fileName={fileName}
         issueStatuses={issueStatuses}
         readinessScore={readinessScore}
+        workflowMode={workflowMode}
         activeIssueType={activeIssueType}
+        onWorkflowModeChange={handleWorkflowModeChange}
         onApprove={handleApprove}
         onSkip={handleSkip}
         onUndo={handleUndo}
@@ -138,6 +157,8 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
       issueStatuses={issueStatuses}
       approvedChanges={approvedChanges}
       readinessScore={readinessScore}
+      workflowMode={workflowMode}
+      onWorkflowModeChange={handleWorkflowModeChange}
       onNavigate={handleNavigate}
       onStartNew={handleStartNew}
     />

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import type { IssueDefinition, IssueSeverity, IssueStatus } from "@/lib/types";
+import type { IssueDefinition, IssueSeverity, IssueStatus, WorkflowImpactMetric, WorkflowMode } from "@/lib/types";
+import { WORKFLOW_MODE_ORDER, WORKFLOW_MODES } from "@/lib/workflows";
 
 const severityStyles: Record<IssueSeverity, string> = {
   blocking: "bg-red-100 text-red-800 border-red-200",
@@ -167,6 +168,62 @@ export function ScoreImpactBox({ points }: { points: number }) {
         <span className="text-2xl font-black text-emerald-700">+{points}</span>
         <span className="text-xs font-medium text-emerald-600">readiness points</span>
       </div>
+    </div>
+  );
+}
+
+export function WorkflowModeSelector({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: WorkflowMode;
+  onChange: (mode: WorkflowMode) => void;
+  compact?: boolean;
+}) {
+  const active = WORKFLOW_MODES[value];
+
+  return (
+    <label className="flex items-center gap-2">
+      {!compact ? (
+        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-400">
+          Preparing for
+        </span>
+      ) : null}
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value as WorkflowMode)}
+        className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm outline-none hover:border-indigo-300 focus:border-indigo-500"
+        aria-label={`Workflow readiness mode: ${active.label}`}
+      >
+        {WORKFLOW_MODE_ORDER.map((mode) => (
+          <option key={mode} value={mode}>
+            {WORKFLOW_MODES[mode].label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+export function ImpactMetricCard({ metric }: { metric: WorkflowImpactMetric }) {
+  const accent: Record<IssueSeverity, string> = {
+    blocking: "border-red-200 bg-red-50 text-red-700",
+    high: "border-red-200 bg-red-50 text-red-700",
+    "medium-high": "border-orange-200 bg-orange-50 text-orange-700",
+    medium: "border-amber-200 bg-amber-50 text-amber-700",
+    "low-medium": "border-lime-200 bg-lime-50 text-lime-700",
+    low: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  };
+
+  return (
+    <div className={`rounded-lg border p-3 ${accent[metric.severity]}`}>
+      <p className="text-[11px] font-bold uppercase tracking-wide opacity-80">{metric.label}</p>
+      <div className="mt-2 flex items-baseline gap-1.5">
+        <span className="text-3xl font-black tabular-nums">{metric.value}</span>
+        <span className="text-xs font-bold">{metric.unit}</span>
+      </div>
+      <p className="mt-2 text-xs leading-relaxed opacity-90">{metric.detail}</p>
     </div>
   );
 }

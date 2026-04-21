@@ -1,16 +1,19 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import type { ApprovedChange, CRMRecord, IssueStatus, IssueType } from "@/lib/types";
+import type { ApprovedChange, CRMRecord, IssueStatus, IssueType, WorkflowMode } from "@/lib/types";
 import { SAMPLE_DATA } from "@/lib/data";
-import { INITIAL_SCORE, ISSUE_DEFINITIONS } from "@/lib/issueDetection";
+import { INITIAL_SCORE } from "@/lib/issueDetection";
+import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
 import Sidebar from "./Sidebar";
 import {
   DiffCell,
+  ImpactMetricCard,
   SeverityBadge,
   StatusPill,
   StickyDatasetHeader,
   WorkflowLabel,
+  WorkflowModeSelector,
 } from "./harmoniq-ui";
 
 interface ResultsScreenProps {
@@ -19,6 +22,8 @@ interface ResultsScreenProps {
   issueStatuses: Record<IssueType, IssueStatus>;
   approvedChanges: ApprovedChange[];
   readinessScore: number;
+  workflowMode: WorkflowMode;
+  onWorkflowModeChange: (mode: WorkflowMode) => void;
   onNavigate: (screen: "upload" | "profile" | "review" | "results") => void;
   onStartNew: () => void;
 }
@@ -140,52 +145,24 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-function workflowSummary(issueStatuses: Record<IssueType, IssueStatus>) {
-  return [
-    {
-      label: "Routing readiness",
-      status: issueStatuses.missing_owner === "approved" ? "Improved" : "Still blocked",
-      detail: issueStatuses.missing_owner === "approved"
-        ? "Owner gaps are surfaced as review assignments instead of silently falling out of routing."
-        : "Owner gaps remain unresolved and may still block rep assignment.",
-    },
-    {
-      label: "Reporting readiness",
-      status: issueStatuses.duplicate_accounts === "approved" ? "Improved" : "Needs review",
-      detail: issueStatuses.duplicate_accounts === "approved"
-        ? "Duplicate clusters are flagged for canonical record review without auto-merging records."
-        : "Duplicate clusters can still inflate account and pipeline reporting.",
-    },
-    {
-      label: "Segmentation readiness",
-      status: issueStatuses.inconsistent_state === "approved" && issueStatuses.missing_segment === "approved" ? "Improved" : "Partial",
-      detail: issueStatuses.inconsistent_state === "approved"
-        ? "State values are standardized; missing segments are handled according to review decisions."
-        : "Geographic or segment filters may still miss non-standard records.",
-    },
-    {
-      label: "Outreach readiness",
-      status: issueStatuses.invalid_email === "approved" ? "Improved" : "Needs review",
-      detail: issueStatuses.invalid_email === "approved"
-        ? "Invalid email values are corrected when obvious or flagged before sequence export."
-        : "Outreach lists may still contain malformed or placeholder addresses.",
-    },
-  ];
-}
-
 export default function ResultsScreen({
   fileName,
   uploadedAt,
   issueStatuses,
   approvedChanges,
   readinessScore,
+  workflowMode,
+  onWorkflowModeChange,
   onNavigate,
   onStartNew,
 }: ResultsScreenProps) {
+  const workflow = WORKFLOW_MODES[workflowMode];
+  const definitions = getWorkflowIssueDefinitions(workflowMode);
+  const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
   const cleanedData = useMemo(() => applyChanges(SAMPLE_DATA, approvedChanges), [approvedChanges]);
   const changedFields = useMemo(() => buildChangedFields(approvedChanges), [approvedChanges]);
-  const totalBefore = ISSUE_DEFINITIONS.reduce((sum, definition) => sum + definition.recordCount, 0);
-  const totalRemaining = ISSUE_DEFINITIONS.reduce((sum, definition) => (
+  const totalBefore = definitions.reduce((sum, definition) => sum + definition.recordCount, 0);
+  const totalRemaining = definitions.reduce((sum, definition) => (
     sum + (issueStatuses[definition.type] === "approved" ? 0 : definition.recordCount)
   ), 0);
   const approvedIssueCount = Object.values(issueStatuses).filter((status) => status === "approved").length;
@@ -228,16 +205,18 @@ export default function ResultsScreen({
         fileName={fileName}
         readinessScore={readinessScore}
         issueStatuses={issueStatuses}
+        workflowMode={workflowMode}
         onNavigate={onNavigate}
       />
 
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title="Results"
-          subtitle={`${fileName || "messy_crm_export.csv"} · reviewed ${formatDate(uploadedAt)} · ${approvedChanges.length} logged changes`}
+          subtitle={`${fileName || "messy_crm_export.csv"} · ${workflow.label} · reviewed ${formatDate(uploadedAt)} · ${approvedChanges.length} logged changes`}
           badge={<StatusPill status={approvedIssueCount > 0 ? "approved" : "pending"} />}
           actions={
             <>
+              <WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />
               <button
                 type="button"
                 onClick={onStartNew}
@@ -322,27 +301,19 @@ export default function ResultsScreen({
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-5">
-            <h2 className="text-sm font-black text-slate-950">Workflow Readiness Improvement</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
-              {workflowSummary(issueStatuses).map((item) => {
-                const topColor =
-                  item.status === "Improved"     ? "bg-emerald-500" :
-                  item.status === "Still blocked" ? "bg-red-400"     :
-                  item.status === "Partial"       ? "bg-amber-400"   : "bg-amber-400";
-                const statusColor =
-                  item.status === "Improved"     ? "text-emerald-700" :
-                  item.status === "Still blocked" ? "text-red-700"     : "text-amber-700";
-                return (
-                  <div key={item.label} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-                    <div className={`h-1 w-full ${topColor}`} />
-                    <div className="p-3">
-                      <p className="text-xs font-black text-slate-900">{item.label}</p>
-                      <p className={`mt-1 text-xs font-bold ${statusColor}`}>{item.status}</p>
-                      <p className="mt-2 text-xs leading-relaxed text-slate-500">{item.detail}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-950">Workflow Readiness Improvement</h2>
+                <p className="mt-1 text-xs text-slate-500">{workflow.primaryRisk}</p>
+              </div>
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                {workflow.label}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {impactMetrics.map((metric) => (
+                <ImpactMetricCard key={metric.label} metric={metric} />
+              ))}
             </div>
           </section>
 
@@ -362,7 +333,7 @@ export default function ResultsScreen({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {ISSUE_DEFINITIONS.map((definition) => {
+                  {definitions.map((definition) => {
                     const status = issueStatuses[definition.type];
                     const afterCount = status === "approved" ? 0 : definition.recordCount;
                     return (
@@ -457,7 +428,7 @@ export default function ResultsScreen({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {approvedChanges.slice(0, 30).map((change) => {
-                        const definition = ISSUE_DEFINITIONS.find((item) => item.type === change.issueType)!;
+                        const definition = definitions.find((item) => item.type === change.issueType)!;
                         return (
                           <tr key={change.changeId} className="hover:bg-slate-50">
                             <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">{change.changeId}</td>
