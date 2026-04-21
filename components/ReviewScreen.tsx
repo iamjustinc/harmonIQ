@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { IssueStatus, IssueType, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
 import { DETECTED, generateChanges } from "@/lib/issueDetection";
@@ -54,6 +55,25 @@ type DiffRow = {
   after: string;
   basis: string;
 };
+
+type ManualFixField = "owner" | "segment" | "email";
+
+type ManualFixRow = {
+  id: string;
+  recordId: string;
+  accountName: string;
+  field: ManualFixField;
+  fieldLabel: string;
+  currentValue: string;
+  suggestedValue: string;
+  confidence: number;
+  rationale: string;
+  context: string;
+};
+
+type ManualDecision = "suggested" | "manual" | "unchanged";
+
+let manualChangeCounter = 1;
 
 function suggestionStateLabel(suggestion: ResolutionSuggestion): string {
   if (suggestion.reviewState === "deterministic") return "Deterministic";
@@ -164,6 +184,98 @@ function getSuggestionPreview(type: IssueType): ResolutionSuggestion | null {
   if (type === "schema_mismatch") return DETECTED.schemaMismatches.find((item) => item.suggestion)?.suggestion
     ?? fallbackSuggestion("schema_mapping", "Confirm mapping", "Source-to-canonical field mapping is visible for review.");
   return null;
+}
+
+function supportsManualFix(type: IssueType): boolean {
+  return type === "missing_owner" || type === "missing_segment" || type === "invalid_email";
+}
+
+function getManualFixRows(type: IssueType): ManualFixRow[] {
+  if (type === "missing_owner") {
+    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => ({
+      id: record.record_id,
+      recordId: record.record_id,
+      accountName: record.account_name.trim(),
+      field: "owner",
+      fieldLabel: "Owner",
+      currentValue: ownerValue,
+      suggestedValue: suggestion.suggestedValue,
+      confidence: suggestion.confidence,
+      rationale: suggestion.rationale,
+      context: `${record.segment || "No segment"} · ${record.state || "No state"}`,
+    }));
+  }
+
+  if (type === "missing_segment") {
+    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => ({
+      id: record.record_id,
+      recordId: record.record_id,
+      accountName: record.account_name.trim(),
+      field: "segment",
+      fieldLabel: "Segment",
+      currentValue: segmentValue,
+      suggestedValue: suggestion.suggestedValue,
+      confidence: suggestion.confidence,
+      rationale: suggestion.rationale,
+      context: `${record.owner || "No owner"} · ${record.state || "No state"}`,
+    }));
+  }
+
+  if (type === "invalid_email") {
+    return DETECTED.invalidEmails.map(({ record, emailValue, reason, suggestedValue, suggestion }) => ({
+      id: record.record_id,
+      recordId: record.record_id,
+      accountName: record.account_name.trim(),
+      field: "email",
+      fieldLabel: "Email",
+      currentValue: emailValue,
+      suggestedValue: suggestedValue ?? "",
+      confidence: suggestion?.confidence ?? 48,
+      rationale: suggestion?.rationale ?? "No safe correction was inferred from the available CRM fields.",
+      context: `${record.contact_name} · ${reason}`,
+    }));
+  }
+
+  return [];
+}
+
+function buildManualChange(
+  issueType: IssueType,
+  row: ManualFixRow,
+  value: string,
+  decision: ManualDecision,
+  riskLevel: ApprovedChange["riskLevel"]
+): ApprovedChange {
+  const changeId = `MAN-${String(manualChangeCounter++).padStart(3, "0")}`;
+  const timestamp = new Date().toISOString();
+
+  if (decision === "unchanged") {
+    return {
+      changeId,
+      recordId: row.recordId,
+      accountName: row.accountName,
+      field: "harmoniq_review_status",
+      before: "",
+      after: `Manual exception reviewed: ${row.fieldLabel} left unchanged`,
+      issueType,
+      timestamp,
+      riskLevel,
+      userDecision: "Flagged",
+    };
+  }
+
+  return {
+    changeId,
+    recordId: row.recordId,
+    accountName: row.accountName,
+    field: row.field,
+    before: row.currentValue || "(blank)",
+    after: value.trim(),
+    issueType,
+    timestamp,
+    riskLevel,
+    userDecision: "Accepted",
+  };
 }
 
 function FlagTable({ issueType }: { issueType: IssueType }) {
@@ -325,6 +437,229 @@ function RecordPreview({ issueType }: { issueType: IssueType }) {
   return <FlagTable issueType={issueType} />;
 }
 
+function ManualFixDrawer({
+  issueType,
+  title,
+  riskLevel,
+  rows,
+  onClose,
+  onSave,
+}: {
+  issueType: IssueType;
+  title: string;
+  riskLevel: ApprovedChange["riskLevel"];
+  rows: ManualFixRow[];
+  onClose: () => void;
+  onSave: (changes: ApprovedChange[]) => void;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, { value: string; decision: ManualDecision }>>(() => (
+    Object.fromEntries(rows.map((row) => [
+      row.id,
+      {
+        value: row.suggestedValue || row.currentValue,
+        decision: row.suggestedValue ? "suggested" : "unchanged",
+      },
+    ]))
+  ));
+
+  const updateDraft = (row: ManualFixRow, value: string, decision: ManualDecision) => {
+    setDrafts((current) => ({
+      ...current,
+      [row.id]: { value, decision },
+    }));
+  };
+
+  const useAllSuggestions = () => {
+    setDrafts(Object.fromEntries(rows.map((row) => [
+      row.id,
+      {
+        value: row.suggestedValue || row.currentValue,
+        decision: row.suggestedValue ? "suggested" : "unchanged",
+      },
+    ])));
+  };
+
+  const changedCount = rows.filter((row) => {
+    const draft = drafts[row.id];
+    return draft && draft.decision !== "unchanged" && draft.value.trim() !== (row.currentValue || "").trim();
+  }).length;
+
+  const exceptionCount = rows.length - changedCount;
+
+  const hasInvalidManualValue = rows.some((row) => {
+    const draft = drafts[row.id];
+    return draft?.decision !== "unchanged" && !draft?.value.trim();
+  });
+
+  const save = () => {
+    const changes = rows.map((row) => {
+      const draft = drafts[row.id] ?? { value: row.currentValue, decision: "unchanged" as ManualDecision };
+      return buildManualChange(issueType, row, draft.value, draft.decision, riskLevel);
+    });
+    onSave(changes);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/30 backdrop-blur-[1px]">
+      <button type="button" className="min-w-0 flex-1 cursor-default" aria-label="Close manual fix drawer" onClick={onClose} />
+      <aside className="flex h-full w-full max-w-4xl flex-col border-l border-slate-200 bg-white shadow-2xl">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-indigo-600">Manual exception handling</p>
+              <h2 className="mt-1 text-lg font-black text-slate-950">{title}</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-relaxed text-slate-500">
+                Edit only the affected field for identified records. Suggestions stay reviewable; saving creates an auditable override log.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+              aria-label="Close manual fix drawer"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                <path d="M4 4l6 6M10 4l-6 6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
+              {rows.length} affected records
+            </span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700">
+              {changedCount} field edits
+            </span>
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
+              {exceptionCount} reviewed exceptions
+            </span>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Affected records only</p>
+            <button
+              type="button"
+              onClick={useAllSuggestions}
+              className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50"
+            >
+              Use all suggestions
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            {rows.map((row) => {
+              const draft = drafts[row.id] ?? { value: row.currentValue, decision: "unchanged" as ManualDecision };
+              const isUnchanged = draft.decision === "unchanged";
+
+              return (
+                <section key={row.id} className="rounded-lg border border-slate-200 bg-white p-4">
+                  <div className="grid gap-4 lg:grid-cols-[1fr_1.15fr]">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-[11px] font-bold text-slate-500">{row.recordId}</span>
+                        <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                          {row.fieldLabel}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm font-black text-slate-950">{row.accountName}</p>
+                      <p className="mt-1 text-xs text-slate-500">{row.context}</p>
+                      <dl className="mt-3 grid gap-2 text-xs">
+                        <div>
+                          <dt className="font-bold uppercase tracking-wide text-slate-400">Current value</dt>
+                          <dd className="mt-1 rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-red-700">
+                            {row.currentValue || "(blank)"}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="font-bold uppercase tracking-wide text-slate-400">Suggested value</dt>
+                          <dd className="mt-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1 font-semibold text-indigo-800">
+                            {row.suggestedValue || "No safe suggestion"}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500" htmlFor={`manual-${row.id}`}>
+                          Manual value
+                        </label>
+                        <input
+                          id={`manual-${row.id}`}
+                          value={draft.value}
+                          onChange={(event) => updateDraft(row, event.target.value, "manual")}
+                          placeholder={`Enter ${row.fieldLabel.toLowerCase()}`}
+                          className="mt-1 h-10 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={!row.suggestedValue}
+                          onClick={() => updateDraft(row, row.suggestedValue, "suggested")}
+                          className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Use suggestion
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateDraft(row, row.currentValue, "unchanged")}
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                        >
+                          Leave unchanged
+                        </button>
+                      </div>
+
+                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Suggestion rationale</p>
+                          <ConfidenceDots pct={row.confidence} />
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-600">{row.rationale}</p>
+                        <p className="mt-2 text-[11px] font-bold text-slate-500">
+                          Decision: {isUnchanged ? "Reviewed exception - left unchanged" : draft.decision === "suggested" ? "Using suggested value" : "Manual override"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 bg-white px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-xl text-xs leading-relaxed text-slate-500">
+              Saving resolves this issue type as a reviewed decision. Field edits update the cleaned CSV; unchanged exceptions are logged in review status.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 rounded-lg border border-slate-200 px-4 text-sm font-bold text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={hasInvalidManualValue}
+                className="h-10 rounded-lg bg-indigo-600 px-4 text-sm font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                Save overrides
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
 export default function ReviewScreen({
   fileName,
   issueStatuses,
@@ -344,12 +679,21 @@ export default function ReviewScreen({
   const definition = definitions.find((item) => item.type === activeIssueType) ?? definitions[0];
   const suggestionPreview = getSuggestionPreview(activeIssueType);
   const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
+  const manualFixRows = getManualFixRows(activeIssueType);
+  const canManualFix = supportsManualFix(activeIssueType) && manualFixRows.length > 0;
+  const [manualFixOpen, setManualFixOpen] = useState(false);
+  const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
   const allReviewed = reviewedCount === definitions.length;
 
   const approveCurrentIssue = () => {
     onApprove(activeIssueType, generateChanges(activeIssueType));
+  };
+
+  const saveManualFixes = (changes: ApprovedChange[]) => {
+    setManualFixOpen(false);
+    onApprove(activeIssueType, changes);
   };
 
   return (
@@ -460,125 +804,193 @@ export default function ReviewScreen({
         </div>
       </main>
 
-      <aside className="flex h-full w-80 shrink-0 flex-col border-l border-slate-200 bg-white">
-        <div className="border-b border-slate-200 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-50 text-indigo-700">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-              </svg>
-            </div>
-            <h2 className="text-sm font-black text-slate-950">Analysis &amp; Recommendation</h2>
+      <aside
+        className={`flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white transition-[width] duration-200 ease-out ${
+          recommendationCollapsed ? "w-14" : "w-80"
+        }`}
+      >
+        <div className={recommendationCollapsed ? "flex h-full flex-col items-center bg-white" : "hidden"}>
+          <button
+            type="button"
+            onClick={() => setRecommendationCollapsed(false)}
+            className="mt-3 flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+            aria-label="Expand analysis panel"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M9 3.5 5.5 7 9 10.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+          <div className="mt-4 flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+            <svg width="14" height="14" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+              <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+            </svg>
           </div>
-          <p className="mt-1 text-[11px] text-slate-400">{workflow.label} mode · human approval required</p>
+          <div className="mt-4 flex flex-1 items-start justify-center">
+            <p className="origin-center rotate-90 whitespace-nowrap text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Analysis
+            </p>
+          </div>
+          <div className="mb-4 h-2 w-2 rounded-full bg-indigo-500" aria-hidden="true" />
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <section>
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Issue type</p>
-            <p className="text-sm font-black text-slate-900">{definition.title}</p>
-          </section>
-
-          <section>
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Detection confidence</p>
-            <ConfidenceDots pct={definition.confidence} />
-          </section>
-
-          <section>
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk level</p>
-            <SeverityBadge severity={definition.severity} />
-          </section>
-
-          {suggestionPreview ? (
-            <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Missing-value suggestion</p>
-              <p className="mt-2 text-sm font-black text-indigo-950">{suggestionPreview.suggestedValue}</p>
-              <div className="mt-2">
-                <ConfidenceDots pct={suggestionPreview.confidence} />
+        <div className={recommendationCollapsed ? "hidden" : "flex min-h-0 flex-1 flex-col"}>
+          <div className="border-b border-slate-200 px-5 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-50 text-indigo-700">
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                      <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <h2 className="truncate text-sm font-black text-slate-950">Analysis &amp; Recommendation</h2>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">{workflow.label} mode · human approval required</p>
               </div>
-              <p className="mt-2 text-xs leading-relaxed text-indigo-900">{suggestionPreview.rationale}</p>
-              <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
-            </section>
-          ) : null}
-
-          <section>
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Rationale</p>
-            <p className="text-xs leading-relaxed text-slate-700">{definition.whyItMatters}</p>
-          </section>
-
-          <section>
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Suggested action</p>
-            <p className="text-xs leading-relaxed text-slate-700">{definition.suggestedAction}</p>
-          </section>
-
-          <section>
-            <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Business implication</p>
-            <p className="text-xs leading-relaxed text-slate-700">{definition.businessImpact}</p>
-          </section>
-
-          <DownstreamBox>{definition.downstreamImplication}</DownstreamBox>
-          <ScoreImpactBox points={definition.readinessImpact} />
-
-          <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trust cues</p>
-            <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-600">
-              <li>Changes apply at the issue type level — no row-level editing.</li>
-              <li>Every approved change is logged with issue linkage and timestamp.</li>
-              <li>All decisions are reversible until export.</li>
-            </ul>
-          </section>
-        </div>
-
-        <div className="space-y-2 border-t border-slate-200 p-4">
-          {status === "pending" ? (
-            <>
               <button
                 type="button"
-                onClick={approveCurrentIssue}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 active:bg-emerald-800"
+                onClick={() => setRecommendationCollapsed(true)}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                aria-label="Collapse analysis panel"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M2 7l3.5 3.5 6.5-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M5 3.5 8.5 7 5 10.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                Approve Issue Type
               </button>
-              <button
-                type="button"
-                onClick={() => onSkip(activeIssueType)}
-                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              >
-                Skip for now
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80">
-                <StatusPill status={status} />
-              </div>
-              <button
-                type="button"
-                onClick={() => onUndo(activeIssueType)}
-                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              >
-                Undo decision
-              </button>
-            </>
-          )}
+            </div>
+          </div>
 
-          {allReviewed ? (
-            <button
-              type="button"
-              onClick={onFinish}
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
-            >
-              View Results
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                <path d="M2.5 6.5h8M7.5 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          ) : null}
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <section>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Issue type</p>
+              <p className="text-sm font-black text-slate-900">{definition.title}</p>
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Detection confidence</p>
+              <ConfidenceDots pct={definition.confidence} />
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk level</p>
+              <SeverityBadge severity={definition.severity} />
+            </section>
+
+            {suggestionPreview ? (
+              <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Missing-value suggestion</p>
+                <p className="mt-2 text-sm font-black text-indigo-950">{suggestionPreview.suggestedValue}</p>
+                <div className="mt-2">
+                  <ConfidenceDots pct={suggestionPreview.confidence} />
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-indigo-900">{suggestionPreview.rationale}</p>
+                <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
+              </section>
+            ) : null}
+
+            <section>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Rationale</p>
+              <p className="text-xs leading-relaxed text-slate-700">{definition.whyItMatters}</p>
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Suggested action</p>
+              <p className="text-xs leading-relaxed text-slate-700">{definition.suggestedAction}</p>
+            </section>
+
+            <section>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Business implication</p>
+              <p className="text-xs leading-relaxed text-slate-700">{definition.businessImpact}</p>
+            </section>
+
+            <DownstreamBox>{definition.downstreamImplication}</DownstreamBox>
+            <ScoreImpactBox points={definition.readinessImpact} />
+
+            <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trust cues</p>
+              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-600">
+                <li>Changes apply at the issue type level — no row-level editing.</li>
+                <li>Every approved change is logged with issue linkage and timestamp.</li>
+                <li>All decisions are reversible until export.</li>
+              </ul>
+            </section>
+          </div>
+
+          <div className="space-y-2 border-t border-slate-200 p-4">
+            {status === "pending" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={approveCurrentIssue}
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 active:bg-emerald-800"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M2 7l3.5 3.5 6.5-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Approve Issue Type
+                </button>
+                {canManualFix ? (
+                  <button
+                    type="button"
+                    onClick={() => setManualFixOpen(true)}
+                    className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                      <path d="M7.5 2.5 10.5 5.5 4.5 11.5H1.5v-3L7.5 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M6.5 3.5 9.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                    </svg>
+                    Resolve exceptions
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => onSkip(activeIssueType)}
+                  className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                >
+                  Skip for now
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80">
+                  <StatusPill status={status} />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onUndo(activeIssueType)}
+                  className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                >
+                  Undo decision
+                </button>
+              </>
+            )}
+
+            {allReviewed ? (
+              <button
+                type="button"
+                onClick={onFinish}
+                className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
+              >
+                View Results
+                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                  <path d="M2.5 6.5h8M7.5 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            ) : null}
+          </div>
         </div>
       </aside>
+
+      {manualFixOpen ? (
+        <ManualFixDrawer
+          issueType={activeIssueType}
+          title={definition.title}
+          riskLevel={definition.riskLevel}
+          rows={manualFixRows}
+          onClose={() => setManualFixOpen(false)}
+          onSave={saveManualFixes}
+        />
+      ) : null}
     </div>
   );
 }
