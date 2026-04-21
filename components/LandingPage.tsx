@@ -32,7 +32,7 @@ function ProductMock() {
   return (
     // Outer: clips the scaled content to the visual size
     <div
-      className="relative overflow-hidden rounded-lg border border-slate-200 bg-white ring-1 ring-slate-900/5"
+      className="hero-product-window relative overflow-hidden rounded-lg border border-slate-200 bg-white ring-1 ring-slate-900/5"
       style={{ height: "322px", width: "558px" }}
       aria-hidden="true"
     >
@@ -52,6 +52,10 @@ function ProductMock() {
               </svg>
               <span className="font-mono text-[11px] text-slate-400">harmoniq.app/demo</span>
             </div>
+          </div>
+          <div className="ml-auto flex items-center gap-1.5 rounded-full border border-indigo-100 bg-white px-2 py-0.5 text-[9px] font-bold text-indigo-600">
+            <span className="hero-live-dot h-1.5 w-1.5 rounded-full bg-indigo-500" />
+            Analyzing
           </div>
         </div>
 
@@ -148,8 +152,8 @@ function ProductMock() {
                 <span className="inline-flex items-center gap-1 rounded-full border border-orange-200 bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
                   <span className="h-1 w-1 rounded-full bg-current" />Blocking Outreach
                 </span>
-                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
-                  <span className="h-1 w-1 rounded-full bg-current opacity-50" />Pending
+                <span className="inline-flex items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-600">
+                  <span className="hero-live-dot h-1 w-1 rounded-full bg-current" />Analyzing
                 </span>
               </div>
               <p className="mt-0.5 text-[10px] text-slate-400">8 findings · Reduces outreach usability</p>
@@ -201,7 +205,10 @@ function ProductMock() {
                 </div>
                 <p className="text-[11px] font-black text-slate-950">Analysis &amp; Recommendation</p>
               </div>
-              <p className="mt-0.5 text-[9px] text-slate-400">Deterministic analysis · human approval required</p>
+              <p className="mt-0.5 flex items-center gap-1 text-[9px] text-slate-400">
+                <span className="hero-live-dot h-1 w-1 rounded-full bg-indigo-500" />
+                AI-assisted analysis · human approval required
+              </p>
             </div>
             <div className="flex-1 space-y-2.5 overflow-hidden p-3">
               <div>
@@ -217,7 +224,9 @@ function ProductMock() {
               </div>
               <div>
                 <p className="mb-1 text-[8px] font-bold uppercase tracking-wider text-slate-400">Rationale</p>
-                <p className="text-[10px] leading-relaxed text-slate-600">Broken email values cause outreach bounce and sequence failure. Obvious fixes apply; ambiguous ones are flagged for manual review.</p>
+                <div className="hero-recommendation-scan rounded-md border border-indigo-100 bg-indigo-50/50 p-2">
+                  <p className="hero-generated-copy text-[10px] leading-relaxed text-slate-600">Broken email values cause outreach bounce and sequence failure. Obvious fixes apply; ambiguous ones are flagged for manual review.</p>
+                </div>
               </div>
               <div className="rounded-lg border border-orange-200 bg-orange-50 p-2">
                 <p className="mb-1 text-[7px] font-bold uppercase tracking-wider text-orange-600">Downstream implication</p>
@@ -232,13 +241,13 @@ function ProductMock() {
               </div>
             </div>
             <div className="space-y-1.5 border-t border-slate-200 p-3">
-              <button className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[11px] font-bold text-white">
+              <button tabIndex={-1} className="flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 text-[11px] font-bold text-white">
                 <svg width="11" height="11" viewBox="0 0 9 9" fill="none">
                   <path d="M1.5 4.5l2.5 2.5 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 Approve Issue Type
               </button>
-              <button className="flex h-7 w-full items-center justify-center rounded border border-slate-200 text-[10px] font-medium text-slate-400">
+              <button tabIndex={-1} className="flex h-7 w-full items-center justify-center rounded border border-slate-200 text-[10px] font-medium text-slate-400">
                 Skip for now
               </button>
             </div>
@@ -333,8 +342,8 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <section className="border-b border-slate-100 bg-white">
-        <div className="mx-auto max-w-7xl px-6 py-12 lg:py-14 xl:py-16">
+      <section className="hero-atmosphere relative overflow-hidden border-b border-slate-200/70">
+        <div className="relative z-10 mx-auto max-w-7xl px-6 py-12 lg:py-14 xl:py-16">
           <div className="grid items-center gap-8 lg:grid-cols-[minmax(0,1.08fr)_minmax(520px,0.92fr)] lg:gap-9 xl:gap-11">
             <div className="max-w-3xl lg:pt-1">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1">
@@ -387,7 +396,19 @@ export default function LandingPage() {
             </div>
 
             <div className="relative hidden justify-self-end lg:-mt-2 lg:block xl:-mt-3">
-              <ProductMock />
+              <div aria-hidden="true" className="hero-preview-chip absolute -left-5 top-8 z-20 hidden rounded-lg border border-slate-200/80 bg-white/90 px-3 py-2 shadow-sm backdrop-blur-sm xl:block">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Routing readiness</p>
+                <p className="mt-1 text-sm font-black text-slate-950">Owner gaps blocking</p>
+              </div>
+              <div aria-hidden="true" className="hero-preview-chip hero-preview-chip-alt absolute -bottom-4 right-8 z-20 hidden items-center gap-2 rounded-lg border border-emerald-200 bg-white/95 px-3 py-2 text-sm font-bold text-emerald-700 shadow-sm backdrop-blur-sm xl:flex">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                4 fixes ready to review
+              </div>
+              <div className="relative z-10 origin-top-right scale-[0.92] xl:scale-100">
+                <div className="hero-product-frame rounded-xl border border-white/80 bg-white/65 p-2 shadow-[0_24px_80px_rgba(15,23,42,0.14)] ring-1 ring-slate-900/5 backdrop-blur-sm">
+                  <ProductMock />
+                </div>
+              </div>
             </div>
           </div>
         </div>

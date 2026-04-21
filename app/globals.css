@@ -72,6 +72,140 @@ button, a {
   transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms;
 }
 
+/* Landing product atmosphere */
+.hero-atmosphere {
+  background:
+    linear-gradient(115deg, rgba(238, 242, 255, 0.72) 0%, rgba(255, 255, 255, 0.9) 42%, rgba(248, 250, 252, 0.98) 100%),
+    #ffffff;
+}
+
+.hero-atmosphere::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.11) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent 82%);
+  mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), transparent 82%);
+}
+
+.hero-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 58%, rgba(248, 250, 252, 0.92) 100%);
+}
+
+.hero-product-frame {
+  animation: hero-frame-in 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+
+.hero-product-frame:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 28px 90px rgba(15, 23, 42, 0.16);
+}
+
+.hero-product-window {
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+}
+
+.hero-preview-chip {
+  animation: hero-chip-in 720ms cubic-bezier(0.2, 0.8, 0.2, 1) 180ms both;
+}
+
+.hero-preview-chip-alt {
+  animation-delay: 320ms;
+}
+
+.hero-live-dot {
+  animation: hero-live-pulse 2.4s ease-in-out infinite;
+}
+
+.hero-recommendation-scan {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-recommendation-scan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, 0.78) 48%, transparent 70%);
+  transform: translateX(-120%);
+  animation: hero-recommendation-scan 5.8s ease-in-out infinite;
+}
+
+.hero-generated-copy::after {
+  content: "";
+  display: inline-block;
+  width: 1px;
+  height: 0.85em;
+  margin-left: 2px;
+  background: #4f46e5;
+  opacity: 0.55;
+  vertical-align: -0.08em;
+  animation: hero-caret 1.15s steps(1, end) infinite;
+}
+
+@keyframes hero-frame-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-chip-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes hero-live-pulse {
+  0%, 100% {
+    opacity: 0.5;
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
+  }
+}
+
+@keyframes hero-recommendation-scan {
+  0%, 58% {
+    transform: translateX(-120%);
+  }
+  74%, 100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes hero-caret {
+  0%, 50% {
+    opacity: 0.55;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
 /* Landing hero text rotation */
 .hero-type-rotator {
   position: relative;
@@ -114,6 +248,20 @@ button, a {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero-product-frame,
+  .hero-product-frame:hover,
+  .hero-preview-chip,
+  .hero-live-dot {
+    animation: none;
+    transform: none;
+  }
+
+  .hero-recommendation-scan::after,
+  .hero-generated-copy::after {
+    display: none;
+    animation: none;
+  }
+
   .hero-type-rotator span {
     animation: none;
     opacity: 0;
