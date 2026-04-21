@@ -234,7 +234,7 @@ export default function ResultsScreen({
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title="Results"
-          subtitle={`${fileName || "messy_crm_export.csv"} - reviewed ${formatDate(uploadedAt)} - ${approvedChanges.length} logged changes`}
+          subtitle={`${fileName || "messy_crm_export.csv"} · reviewed ${formatDate(uploadedAt)} · ${approvedChanges.length} logged changes`}
           badge={<StatusPill status={approvedIssueCount > 0 ? "approved" : "pending"} />}
           actions={
             <>
@@ -256,8 +256,11 @@ export default function ResultsScreen({
               <button
                 type="button"
                 onClick={exportCleanedCsv}
-                className="h-9 rounded-lg bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700"
+                className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-600 px-4 text-xs font-bold text-white hover:bg-indigo-700"
               >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M6 1v7M3 5.5l3 3 3-3M1.5 10.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 Export Cleaned CSV
               </button>
             </>
@@ -277,8 +280,10 @@ export default function ResultsScreen({
                   </div>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs font-bold text-slate-400">Change</p>
-                  <p className="text-2xl font-black text-emerald-600 tabular-nums">+{scoreGain}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Change</p>
+                  <p className={`text-2xl font-black tabular-nums ${scoreGain > 0 ? "text-emerald-600" : "text-slate-400"}`}>
+                    {scoreGain > 0 ? "+" : ""}{scoreGain}
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-400">After</p>
@@ -310,8 +315,8 @@ export default function ResultsScreen({
                   <p className="text-xs font-medium text-slate-500">Skipped issue types</p>
                 </div>
               </div>
-              <p className="mt-4 text-sm leading-relaxed text-slate-600">
-                Approved changes are applied in memory and exported with an audit-friendly change summary. Skipped issue types remain visible as unresolved risk.
+              <p className="mt-4 text-xs leading-relaxed text-slate-500">
+                Approved changes apply immediately and export with a full audit trail. Skipped issue types remain flagged as unresolved risk.
               </p>
             </div>
           </section>
@@ -319,13 +324,25 @@ export default function ResultsScreen({
           <section className="rounded-lg border border-slate-200 bg-white p-5">
             <h2 className="text-sm font-black text-slate-950">Workflow Readiness Improvement</h2>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
-              {workflowSummary(issueStatuses).map((item) => (
-                <div key={item.label} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                  <p className="text-xs font-black text-slate-900">{item.label}</p>
-                  <p className={`mt-1 text-xs font-bold ${item.status === "Improved" ? "text-emerald-700" : "text-amber-700"}`}>{item.status}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-slate-600">{item.detail}</p>
-                </div>
-              ))}
+              {workflowSummary(issueStatuses).map((item) => {
+                const topColor =
+                  item.status === "Improved"     ? "bg-emerald-500" :
+                  item.status === "Still blocked" ? "bg-red-400"     :
+                  item.status === "Partial"       ? "bg-amber-400"   : "bg-amber-400";
+                const statusColor =
+                  item.status === "Improved"     ? "text-emerald-700" :
+                  item.status === "Still blocked" ? "text-red-700"     : "text-amber-700";
+                return (
+                  <div key={item.label} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <div className={`h-1 w-full ${topColor}`} />
+                    <div className="p-3">
+                      <p className="text-xs font-black text-slate-900">{item.label}</p>
+                      <p className={`mt-1 text-xs font-bold ${statusColor}`}>{item.status}</p>
+                      <p className="mt-2 text-xs leading-relaxed text-slate-500">{item.detail}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
 

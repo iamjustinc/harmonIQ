@@ -171,8 +171,8 @@ function DiffTable({ issueType }: { issueType: IssueType }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
-      <div className="border-b border-slate-200 bg-emerald-50 px-3 py-2">
-        <p className="text-xs font-bold text-emerald-800">Deterministic transformation pattern - batch approval is reviewable and reversible.</p>
+      <div className="border-b border-emerald-100 bg-emerald-50 px-3 py-2">
+        <p className="text-xs font-semibold text-emerald-800">Deterministic correction · reversible before export</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[720px] text-sm">
@@ -311,10 +311,17 @@ export default function ReviewScreen({
       <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-4">
           <h2 className="text-sm font-black text-slate-950">Issue Queue</h2>
-          <p className="mt-1 text-xs text-slate-500">{reviewedCount} of {ISSUE_DEFINITIONS.length} reviewed</p>
-          <div className="mt-3 h-1.5 rounded-full bg-slate-100">
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <p className="text-xs text-slate-500">{reviewedCount} of {ISSUE_DEFINITIONS.length} reviewed</p>
+            {reviewedCount > 0 && (
+              <span className="text-[11px] font-bold text-slate-400">
+                {Math.round((reviewedCount / ISSUE_DEFINITIONS.length) * 100)}%
+              </span>
+            )}
+          </div>
+          <div className="mt-2.5 h-1 rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-indigo-600 transition-all"
+              className="h-full rounded-full bg-indigo-500 transition-all duration-300"
               style={{ width: `${(reviewedCount / ISSUE_DEFINITIONS.length) * 100}%` }}
             />
           </div>
@@ -335,9 +342,12 @@ export default function ReviewScreen({
             <button
               type="button"
               onClick={onFinish}
-              className="flex h-10 w-full items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
             >
               View Results
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2.5 6.5h8M7.5 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           </div>
         ) : null}
@@ -346,7 +356,7 @@ export default function ReviewScreen({
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title={definition.title}
-          subtitle={`${definition.recordCount} findings - ${definition.businessImpact}`}
+          subtitle={`${definition.recordCount} findings · ${definition.businessImpact}`}
           badge={
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={definition.severity} />
@@ -364,8 +374,7 @@ export default function ReviewScreen({
           <section className="rounded-lg border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
               <div>
-                <h2 className="text-sm font-black text-slate-950">Record-Level Review Preview</h2>
-                <p className="mt-0.5 text-xs text-slate-500">Before/after evidence for the selected issue type.</p>
+                <h2 className="text-sm font-black text-slate-950">Record Evidence</h2>
               </div>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
                 {definition.reviewMode}
@@ -386,9 +395,9 @@ export default function ReviewScreen({
                 <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </div>
-            <h2 className="text-sm font-black text-slate-950">AI Recommendation</h2>
+            <h2 className="text-sm font-black text-slate-950">Analysis &amp; Recommendation</h2>
           </div>
-          <p className="mt-1 text-xs text-slate-500">Structured reasoning - human approval required</p>
+          <p className="mt-1 text-[11px] text-slate-400">Deterministic analysis · human approval required</p>
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
@@ -426,11 +435,11 @@ export default function ReviewScreen({
           <ScoreImpactBox points={definition.readinessImpact} />
 
           <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Trust cues</p>
-            <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-700">
-              <li>No row-level approval or inline editing in V1.</li>
-              <li>Recommendation copy comes from issue definitions.</li>
-              <li>Approved changes are logged before export.</li>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trust cues</p>
+            <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-600">
+              <li>Changes apply at the issue type level — no row-level editing.</li>
+              <li>Every approved change is logged with issue linkage and timestamp.</li>
+              <li>All decisions are reversible until export.</li>
             </ul>
           </section>
         </div>
@@ -441,29 +450,32 @@ export default function ReviewScreen({
               <button
                 type="button"
                 onClick={approveCurrentIssue}
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700"
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white hover:bg-emerald-700 active:bg-emerald-800"
               >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 7l3.5 3.5 6.5-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
                 Approve Issue Type
               </button>
               <button
                 type="button"
                 onClick={() => onSkip(activeIssueType)}
-                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50"
+                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
               >
-                Skip For Now
+                Skip for now
               </button>
             </>
           ) : (
             <>
-              <div className="flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+              <div className="flex h-10 w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50/80">
                 <StatusPill status={status} />
               </div>
               <button
                 type="button"
                 onClick={() => onUndo(activeIssueType)}
-                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50"
+                className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
               >
-                Undo Decision
+                Undo decision
               </button>
             </>
           )}
@@ -472,9 +484,12 @@ export default function ReviewScreen({
             <button
               type="button"
               onClick={onFinish}
-              className="flex h-10 w-full items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-700"
             >
               View Results
+              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                <path d="M2.5 6.5h8M7.5 3.5l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </button>
           ) : null}
         </div>

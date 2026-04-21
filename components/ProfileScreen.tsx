@@ -83,7 +83,7 @@ export default function ProfileScreen({
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title="Profile Overview"
-          subtitle={`${fileName || DATASET_META.fileName} - analyzed ${formatDate(uploadedAt)}`}
+          subtitle={`${fileName || DATASET_META.fileName} · analyzed ${formatDate(uploadedAt)}`}
           badge={<StatusPill status="pending" />}
           actions={
             <button
@@ -113,9 +113,9 @@ export default function ProfileScreen({
                   style={{ width: `${readinessScore}%` }}
                 />
               </div>
-              <p className="mt-4 text-sm font-semibold text-red-700">Not ready for routing review</p>
-              <p className="mt-1 text-sm leading-relaxed text-slate-600">
-                The score is weighted by workflow impact, issue ambiguity, and whether a correction can be safely applied without business context.
+              <p className="mt-4 text-sm font-bold text-red-700">Not ready — 7 issue types unresolved</p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-500">
+                Weighted by workflow impact, issue ambiguity, and whether a fix can apply without business context. Resolve all 7 to reach 100.
               </p>
             </div>
 
@@ -145,9 +145,9 @@ export default function ProfileScreen({
               <div className="rounded-lg border border-slate-200 bg-white p-5">
                 <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Business impact</p>
                 <p className="mt-4 text-2xl font-black text-slate-950 tabular-nums">{blockingRecords}</p>
-                <p className="mt-1 text-sm font-semibold text-slate-800">records tied to routing or duplicate risk</p>
-                <p className="mt-3 text-sm leading-relaxed text-slate-600">
-                  Resolve high-risk records first so the cleaned export can support rep routing, pipeline reporting, and follow-up readiness.
+                <p className="mt-1 text-sm font-semibold text-slate-700">records with routing or duplicate risk</p>
+                <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                  Resolve routing and duplicate issues first — they block rep assignment and inflate pipeline reporting.
                 </p>
               </div>
             </div>
@@ -192,7 +192,7 @@ export default function ProfileScreen({
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h2 className="text-sm font-black text-slate-950">Top Issues By Business Risk</h2>
-                  <p className="mt-1 text-xs text-slate-500">Ranked by workflow impact and ambiguity, not just frequency.</p>
+                  <p className="mt-1 text-xs text-slate-400">Ranked by workflow impact and fix ambiguity — not record count.</p>
                 </div>
                 <button
                   type="button"

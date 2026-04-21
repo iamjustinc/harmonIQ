@@ -20,10 +20,10 @@ const REQUIRED_COLUMNS = [
 ];
 
 const ANALYSIS_STEPS = [
-  "Parsing CSV columns",
-  "Confirming CRM field mappings",
-  "Scoring routing blockers",
-  "Preparing review recommendations",
+  "Parsing columns and detecting field types",
+  "Mapping to CRM schema — confirming key fields",
+  "Scoring issues by routing and pipeline risk",
+  "Preparing Decision Workspace",
 ];
 
 export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
@@ -80,7 +80,7 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
             <div className="border-b border-slate-200 px-6 py-5">
               <h1 className="text-xl font-black tracking-tight text-slate-950">Upload CRM CSV</h1>
               <p className="mt-1 text-sm text-slate-600">
-                Start with a messy CRM export and review the issues that affect routing, reporting, and outreach readiness.
+                Detect routing gaps, duplicate records, invalid emails, and schema issues — then walk each fix through human review before export.
               </p>
             </div>
 
@@ -123,8 +123,16 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
                     <p className="text-sm font-bold text-slate-900">Analyzing {fileName}</p>
                     <div className="mt-4 grid gap-2 text-left">
                       {ANALYSIS_STEPS.map((step, index) => (
-                        <div key={step} className="flex items-center gap-2 rounded-md border border-indigo-100 bg-white px-3 py-2 text-xs font-medium text-slate-600">
-                          <span className="flex h-4 w-4 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-black text-indigo-700">
+                        <div
+                          key={step}
+                          style={{
+                            animation: "step-in 0.28s ease forwards",
+                            animationDelay: `${index * 0.32}s`,
+                            opacity: 0,
+                          }}
+                          className="flex items-center gap-2 rounded-md border border-indigo-100 bg-white px-3 py-2 text-xs font-medium text-slate-600"
+                        >
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-[10px] font-black text-indigo-700">
                             {index + 1}
                           </span>
                           {step}
@@ -180,7 +188,7 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
               >
                 <span>
                   <span className="block text-sm font-bold text-slate-900">Use sample CRM dataset</span>
-                  <span className="mt-0.5 block text-xs text-slate-500">messy_crm_export.csv - 79 rows with planted RevOps issues</span>
+                  <span className="mt-0.5 block text-xs text-slate-500">messy_crm_export.csv · 79 rows · 7 issue types pre-planted for demo</span>
                 </span>
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-slate-500" aria-hidden="true">
                   <path d="M6 3.5 10.5 8 6 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -262,7 +270,7 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
             <div className="rounded-lg border border-slate-200 bg-slate-100 p-4">
               <p className="text-xs font-bold text-slate-700">Trust boundary</p>
               <p className="mt-1 text-xs leading-relaxed text-slate-600">
-                Recommendations are generated from deterministic local sample data for this V1 demo. High-risk changes require approval before export.
+                All analysis runs locally on sample data. No data leaves your browser. Every change requires explicit approval before export.
               </p>
             </div>
           </aside>
