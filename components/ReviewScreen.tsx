@@ -702,40 +702,58 @@ function annotateChangesWithAIReview(
 ): ApprovedChange[] {
   if (!recommendation || !AI_ISSUE_TYPES.has(issueType)) return changes;
 
-  const recordId = aiAuditedRecordId(issueType);
+  const primaryRecordId = aiAuditedRecordId(issueType);
   const field = aiAuditedField(issueType);
-  if (!recordId || !field) return changes;
+  if (!primaryRecordId || !field) return changes;
   const candidateComparison = candidateComparisonSummary(recommendation, candidates);
 
   return changes.map((change) => {
-    if (change.recordId !== recordId || change.field !== field) return change;
+    // Only process changes for the same issue type and field.
+    if (change.issueType !== issueType || change.field !== field) return change;
 
-    if (recommendation.recommendedValue) {
-      return {
-        ...change,
-        after: recommendation.recommendedValue,
-        userDecision: "Accepted",
-        resolutionType: "ai_reviewed",
-        basisLabel: "AI-reviewed recommendation",
-        evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and selected "${recommendation.recommendedValue}" from ${recommendation.basisType.replace(/_/g, " ")} evidence. ${recommendation.evidenceSummary}`,
-        aiCandidateCount: candidates.length,
-        candidateComparison,
-      };
+    // ── Primary record: the one whose context was actually sent to AI ──
+    if (change.recordId === primaryRecordId) {
+      if (recommendation.recommendedValue) {
+        return {
+          ...change,
+          after: recommendation.recommendedValue,
+          userDecision: "Accepted",
+          resolutionType: "ai_reviewed",
+          basisLabel: "AI-reviewed recommendation",
+          evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and selected "${recommendation.recommendedValue}" from ${recommendation.basisType.replace(/_/g, " ")} evidence. ${recommendation.evidenceSummary}`,
+          aiCandidateCount: candidates.length,
+          candidateComparison,
+        };
+      }
+
+      if (recommendation.manualReviewRequired) {
+        return {
+          ...change,
+          after: unresolvedValueForIssue(issueType),
+          userDecision: "Flagged",
+          resolutionType: "unresolved_review_required",
+          evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and declined to select a trusted value. ${recommendation.cautionNote ?? recommendation.evidenceSummary}`,
+          aiCandidateCount: candidates.length,
+          candidateComparison,
+        };
+      }
+
+      return change;
     }
 
-    if (recommendation.manualReviewRequired) {
-      return {
-        ...change,
-        after: unresolvedValueForIssue(issueType),
-        userDecision: "Flagged",
-        resolutionType: "unresolved_review_required",
-        evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and declined to select a trusted value. ${recommendation.cautionNote ?? recommendation.evidenceSummary}`,
-        aiCandidateCount: candidates.length,
-        candidateComparison,
-      };
-    }
-
-    return change;
+    // ── Other records in the same issue type ──
+    // Their own deterministic / reference resolution type and `after` value are
+    // correct for their specific record context. We add aiCandidateCount so that
+    // every row in the transformation log shows that AI reviewed this issue, and
+    // we append a brief note to evidenceDetail for full audit transparency.
+    return {
+      ...change,
+      aiCandidateCount: candidates.length,
+      evidenceDetail: [
+        change.evidenceDetail ?? "",
+        `AI reviewed ${candidates.length} bounded candidates for this issue type (representative context: ${primaryRecordId}); this record's value is from its individual deterministic/reference evidence.`,
+      ].filter(Boolean).join(" "),
+    };
   });
 }
 
@@ -852,7 +870,10 @@ function AIRecommendationPanel({
                   </div>
                 </div>
                 <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
-                  {candidateReason(candidate, recommendation)}
+                  {/* Prefer the model's own rejection reason when available */}
+                  {recommendation.rejectedCandidateSummary.find((entry) =>
+                    entry.toLowerCase().startsWith(candidate.value.toLowerCase() + ":")
+                  )?.replace(/^[^:]+:\s*/, "") ?? candidateReason(candidate, recommendation)}
                 </p>
                 {candidate.basisDetail ? (
                   <p className="mt-0.5 text-[10px] leading-relaxed text-slate-500">Signal: {candidate.basisDetail}</p>

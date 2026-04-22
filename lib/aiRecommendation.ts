@@ -92,6 +92,12 @@ export interface AIRecommendationResult {
   evidenceSummary: string;
   /** Caution about this recommendation, or null. */
   cautionNote: string | null;
+  /**
+   * Per-candidate rejection reasons provided by the model.
+   * Each entry is a concise string like "CandidateName: reason why rejected".
+   * Empty array when no candidates were evaluated or no rejections occurred.
+   */
+  rejectedCandidateSummary: string[];
   /** Marks this object as AI-generated so the UI can label it clearly. */
   aiGenerated: true;
 }

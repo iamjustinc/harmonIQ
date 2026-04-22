@@ -127,6 +127,12 @@ function validateAndNormalize(
       ? String(raw.cautionNote)
       : null;
 
+  const rejectedCandidateSummary: string[] = Array.isArray(raw.rejectedCandidateSummary)
+    ? (raw.rejectedCandidateSummary as unknown[])
+        .filter((v): v is string => typeof v === "string")
+        .slice(0, 4)
+    : [];
+
   return {
     recommendedValue,
     basisType,
@@ -142,6 +148,7 @@ function validateAndNormalize(
         ? raw.evidenceSummary
         : "Evidence summary not available.",
     cautionNote,
+    rejectedCandidateSummary,
     aiGenerated: true,
   };
 }
@@ -158,8 +165,11 @@ Required JSON shape:
   "rationale": string,
   "manualReviewRequired": boolean,
   "evidenceSummary": string,
-  "cautionNote": string | null
+  "cautionNote": string | null,
+  "rejectedCandidateSummary": string[]
 }
+
+For "rejectedCandidateSummary": return a concise array of strings explaining why each non-selected candidate was rejected. Format each entry as "CandidateName: reason". Maximum 4 entries. Return an empty array [] when there are no rejections or when recommendedValue is null. Example: ["Olivia Park: territory covers SMB segment only, not Enterprise", "Lucas Rivera: Northeast territory, no evidence this account is Northeast-based"].
 
 STRICT RULES:
 1. recommendedValue MUST be null OR one of the exact strings in the candidateValues list.
