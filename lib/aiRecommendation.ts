@@ -7,8 +7,8 @@
  * is enforced both in the prompt and server-side in the API route.
  *
  * When no strong evidence exists, the AI returns manualReviewRequired = true
- * and recommendedValue = null. The fallback (no API key, network error, etc.)
- * is always null so the existing deterministic suggestion remains untouched.
+ * and recommendedValue = null. Failures return an explicit fallback state so
+ * the UI can tell users that deterministic/reference suggestions are active.
  */
 
 import type { IssueType, WorkflowMode } from "./types";
@@ -78,16 +78,24 @@ export interface AIRecommendationResult {
   aiGenerated: true;
 }
 
+export type AIRecommendationFetchStatus = "loaded" | "fallback" | "unavailable";
+
+export interface AIRecommendationFetchResult {
+  status: AIRecommendationFetchStatus;
+  result: AIRecommendationResult | null;
+  message: string;
+  provider?: "openai";
+}
+
 // ─── Client-side fetch helper ────────────────────────────────────────────────
 
 /**
- * Calls /api/recommend and returns a structured AI recommendation.
- * Returns null on any error (network failure, missing API key, timeout).
- * The caller must treat null as "fall back to deterministic suggestion".
+ * Calls /api/recommend and returns a structured AI recommendation plus a
+ * diagnostic status for the review panel.
  */
-export async function fetchAIRecommendation(
+export async function fetchAIRecommendationWithStatus(
   request: AIRecommendationRequest
-): Promise<AIRecommendationResult | null> {
+): Promise<AIRecommendationFetchResult> {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12_000);
@@ -100,12 +108,52 @@ export async function fetchAIRecommendation(
     });
 
     clearTimeout(timeout);
-    if (!response.ok) return null;
+    const data = await response.json() as {
+      result?: AIRecommendationResult;
+      error?: string;
+      fallbackReason?: string;
+      provider?: "openai";
+    };
 
-    const data = await response.json() as { result?: AIRecommendationResult };
-    return data.result ?? null;
+    if (!response.ok) {
+      return {
+        status: "unavailable",
+        result: null,
+        message: data.fallbackReason ?? data.error ?? "AI unavailable; deterministic/reference fallback is active.",
+        provider: data.provider,
+      };
+    }
+
+    if (data.result) {
+      return {
+        status: "loaded",
+        result: data.result,
+        message: "AI recommendation loaded.",
+        provider: data.provider ?? "openai",
+      };
+    }
+
+    return {
+      status: "fallback",
+      result: null,
+      message: data.fallbackReason ?? "AI returned no recommendation; deterministic/reference fallback is active.",
+      provider: data.provider,
+    };
   } catch {
-    // Network error, abort, JSON parse failure — silent fallback
-    return null;
+    return {
+      status: "unavailable",
+      result: null,
+      message: "AI unavailable; deterministic/reference fallback is active.",
+    };
   }
+}
+
+/**
+ * Backward-compatible helper for callers that only need the recommendation.
+ */
+export async function fetchAIRecommendation(
+  request: AIRecommendationRequest
+): Promise<AIRecommendationResult | null> {
+  const response = await fetchAIRecommendationWithStatus(request);
+  return response.result;
 }

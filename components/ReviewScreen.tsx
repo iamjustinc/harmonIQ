@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import type { IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
-import { fetchAIRecommendation, type AIRecommendationRequest, type AIRecommendationResult } from "@/lib/aiRecommendation";
+import {
+  fetchAIRecommendationWithStatus,
+  type AIRecommendationFetchStatus,
+  type AIRecommendationRequest,
+  type AIRecommendationResult,
+} from "@/lib/aiRecommendation";
 import { DETECTED, generateChanges } from "@/lib/issueDetection";
 import { contextualizeSuggestion, EMPTY_REFERENCE_CONTEXT, suggestionBasisLabel } from "@/lib/referenceContext";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
@@ -395,17 +400,23 @@ const CONFIDENCE_BAND_COLORS: Record<string, string> = {
   insufficient: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-function AIRecommendationPanel({ recommendation }: { recommendation: AIRecommendationResult }) {
+function AIRecommendationPanel({ recommendation, provider }: { recommendation: AIRecommendationResult; provider?: "openai" }) {
   const bandColor = CONFIDENCE_BAND_COLORS[recommendation.confidenceBand] ?? CONFIDENCE_BAND_COLORS.insufficient;
 
   return (
     <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
-      <div className="flex items-center gap-1.5">
-        <p className="text-[10px] font-black uppercase tracking-wider text-violet-600">AI Analysis</p>
-        {/* sparkle icon */}
-        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path d="M6 1 7 4.5 10.5 5.5 7 6.5 6 10 5 6.5 1.5 5.5 5 4.5Z" fill="currentColor" className="text-violet-400" />
-        </svg>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[10px] font-black uppercase tracking-wider text-violet-600">AI recommendation loaded</p>
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 1 7 4.5 10.5 5.5 7 6.5 6 10 5 6.5 1.5 5.5 5 4.5Z" fill="currentColor" className="text-violet-400" />
+          </svg>
+        </div>
+        {provider ? (
+          <span className="rounded-full border border-violet-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+            OpenAI
+          </span>
+        ) : null}
       </div>
 
       {recommendation.recommendedValue ? (
@@ -435,6 +446,26 @@ function AIRecommendationPanel({ recommendation }: { recommendation: AIRecommend
       {recommendation.manualReviewRequired && !recommendation.recommendedValue ? (
         <p className="mt-2 text-[11px] font-bold text-amber-700">Assign this field manually before export.</p>
       ) : null}
+    </section>
+  );
+}
+
+function AIFallbackPanel({
+  status,
+  message,
+}: {
+  status: Exclude<AIRecommendationFetchStatus, "loaded">;
+  message: string;
+}) {
+  const title = status === "unavailable" ? "AI unavailable" : "AI fallback active";
+
+  return (
+    <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{title}</p>
+      <p className="mt-2 text-xs leading-relaxed text-slate-600">{message}</p>
+      <p className="mt-2 text-[11px] font-bold text-slate-500">
+        Deterministic and reference-derived recommendations remain visible for approval.
+      </p>
     </section>
   );
 }
@@ -886,12 +917,16 @@ export default function ReviewScreen({
   const [manualFixOpen, setManualFixOpen] = useState(false);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
   const [aiRecommendation, setAiRecommendation] = useState<AIRecommendationResult | null>(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  const [aiStatus, setAiStatus] = useState<"idle" | "loading" | AIRecommendationFetchStatus>("idle");
+  const [aiStatusMessage, setAiStatusMessage] = useState("");
+  const [aiProvider, setAiProvider] = useState<"openai" | undefined>(undefined);
 
   useEffect(() => {
     if (!AI_ISSUE_TYPES.has(activeIssueType)) {
       setAiRecommendation(null);
-      setAiLoading(false);
+      setAiStatus("idle");
+      setAiStatusMessage("");
+      setAiProvider(undefined);
       return;
     }
 
@@ -903,7 +938,9 @@ export default function ReviewScreen({
 
     if (!preview || !firstRecord) {
       setAiRecommendation(null);
-      setAiLoading(false);
+      setAiStatus("fallback");
+      setAiStatusMessage("AI fallback active; no reviewable missing-value record is available for this issue type.");
+      setAiProvider(undefined);
       return;
     }
 
@@ -915,12 +952,16 @@ export default function ReviewScreen({
     // With no candidates, the AI would be forced to return null — skip the call.
     if (candidateValues.length === 0) {
       setAiRecommendation(null);
-      setAiLoading(false);
+      setAiStatus("fallback");
+      setAiStatusMessage("AI fallback active; no bounded candidate set is available.");
+      setAiProvider(undefined);
       return;
     }
 
     let cancelled = false;
-    setAiLoading(true);
+    setAiStatus("loading");
+    setAiStatusMessage("OpenAI request in progress.");
+    setAiProvider("openai");
     setAiRecommendation(null);
 
     const ctx = activeReferenceContext;
@@ -957,17 +998,19 @@ export default function ReviewScreen({
       },
     };
 
-    fetchAIRecommendation(request).then((result) => {
+    fetchAIRecommendationWithStatus(request).then((response) => {
       if (!cancelled) {
-        setAiRecommendation(result);
-        setAiLoading(false);
+        setAiRecommendation(response.result);
+        setAiStatus(response.status);
+        setAiStatusMessage(response.message);
+        setAiProvider(response.provider);
       }
     });
 
     return () => {
       cancelled = true;
     };
-  }, [activeIssueType, workflowMode, referenceContext]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeIssueType, workflowMode, activeReferenceContext]);
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
   const approvedIssueCount = Object.values(issueStatuses).filter((item) => item === "approved").length;
@@ -1244,15 +1287,18 @@ export default function ReviewScreen({
               </section>
             ) : null}
 
-            {aiLoading ? (
-              <section className="animate-pulse rounded-lg border border-violet-100 bg-violet-50/50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400">AI Analysis</p>
+            {aiStatus === "loading" ? (
+              <section className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">AI recommendation loading</p>
+                <p className="mt-1 text-[11px] font-medium text-violet-700">{aiStatusMessage}</p>
                 <div className="mt-2 h-3 w-3/4 rounded bg-violet-100" />
                 <div className="mt-1.5 h-3 w-1/2 rounded bg-violet-100" />
                 <div className="mt-1.5 h-3 w-2/3 rounded bg-violet-100" />
               </section>
             ) : aiRecommendation ? (
-              <AIRecommendationPanel recommendation={aiRecommendation} />
+              <AIRecommendationPanel recommendation={aiRecommendation} provider={aiProvider} />
+            ) : aiStatus === "fallback" || aiStatus === "unavailable" ? (
+              <AIFallbackPanel status={aiStatus} message={aiStatusMessage} />
             ) : null}
 
             <section>
