@@ -95,6 +95,33 @@ function buildChangeBasis(changes: ApprovedChange[]) {
   return result;
 }
 
+/** Track the `after` value per cell so placeholder states can be rendered distinctly */
+function buildChangeAfterValues(changes: ApprovedChange[]) {
+  const result = new Map<string, Map<string, string>>();
+  for (const change of changes) {
+    if (change.recordId === "DATASET") continue;
+    const fields = result.get(change.recordId) ?? new Map<string, string>();
+    fields.set(change.field, change.after);
+    result.set(change.recordId, fields);
+  }
+  return result;
+}
+
+/**
+ * Returns true when a changed field value is a placeholder status string rather than
+ * a resolved data value. These display as status labels, not as field content.
+ */
+function isPlaceholderAfterValue(value: string): boolean {
+  const lower = value.toLowerCase();
+  return (
+    lower.startsWith("needs") ||
+    lower.startsWith("awaiting") ||
+    lower.startsWith("no strong") ||
+    lower === "unassigned - review" ||
+    lower.includes("[flagged")
+  );
+}
+
 function previewCellClass(
   changed: boolean,
   basisStrength: SuggestionBasisStrength | undefined,
@@ -188,6 +215,7 @@ export default function ResultsScreen({
   const cleanedData = useMemo(() => applyChanges(SAMPLE_DATA, approvedChanges), [approvedChanges]);
   const changedFields = useMemo(() => buildChangedFields(approvedChanges), [approvedChanges]);
   const changeBasis = useMemo(() => buildChangeBasis(approvedChanges), [approvedChanges]);
+  const changeAfterValues = useMemo(() => buildChangeAfterValues(approvedChanges), [approvedChanges]);
   const totalBefore = definitions.reduce((sum, definition) => sum + definition.recordCount, 0);
   const totalRemaining = definitions.reduce((sum, definition) => (
     sum + (issueStatuses[definition.type] === "approved" ? 0 : definition.recordCount)
@@ -453,12 +481,17 @@ export default function ResultsScreen({
                         {previewColumns.map((column) => {
                           const changed = changedFields.get(row.record_id)?.has(column.key);
                           const basis = changeBasis.get(row.record_id)?.get(column.key);
+                          const afterValue = changeAfterValues.get(row.record_id)?.get(column.key);
+                          const isPlaceholder = changed && !!afterValue && isPlaceholderAfterValue(afterValue);
+                          const cellValue = String(row[column.key] ?? "") || "-";
                           return (
                             <td
                               key={column.key}
                               className={`max-w-[220px] truncate px-3 py-2.5 text-xs ${previewCellClass(!!changed, basis, column.key === "record_id")}`}
                             >
-                              {String(row[column.key] ?? "") || "-"}
+                              {isPlaceholder
+                                ? <span className="italic">{cellValue}</span>
+                                : cellValue}
                             </td>
                           );
                         })}

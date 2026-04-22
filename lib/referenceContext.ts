@@ -382,25 +382,32 @@ export function contextualizeSuggestion(
   }
 
   if (issueType === "missing_segment") {
-    const dictionaryEntry = matchSegmentDictionary(baseSuggestion.suggestedValue, context);
-    if (dictionaryEntry) {
-      return {
-        ...baseSuggestion,
-        suggestedValue: dictionaryEntry.segment,
-        confidence: Math.min(90, Math.max(baseSuggestion.confidence + 8, 84)),
-        rationale: `Candidate segment is part of the approved taxonomy${dictionaryEntry.definition ? `: ${dictionaryEntry.definition}` : "."} Review before export because the source record was blank.`,
-        reviewState: "needs_approval",
-        basis: basis("segment_dictionary", "Based on segment dictionary", `${dictionaryEntry.segment} is an allowed segment${dictionaryEntry.lifecycleStage ? ` for ${dictionaryEntry.lifecycleStage} lifecycle records` : ""}.`, "direct", dictionaryEntry.sourceName),
-      };
+    const isPlaceholderSuggestion = baseSuggestion.suggestedValue.toLowerCase().startsWith("needs");
+
+    // Dictionary upgrade: only valid when the base suggestion IS a named segment tier.
+    // Skip if the base is a placeholder (no keyword signal fired).
+    if (!isPlaceholderSuggestion) {
+      const dictionaryEntry = matchSegmentDictionary(baseSuggestion.suggestedValue, context);
+      if (dictionaryEntry) {
+        return {
+          ...baseSuggestion,
+          suggestedValue: dictionaryEntry.segment,
+          confidence: Math.min(90, Math.max(baseSuggestion.confidence + 8, 84)),
+          rationale: `Keyword signal confirmed against segment dictionary: "${dictionaryEntry.segment}" is an allowed tier${dictionaryEntry.definition ? ` — ${dictionaryEntry.definition}` : ""}. Review before export because the source record was blank.`,
+          reviewState: "needs_approval",
+          basis: basis("segment_dictionary", "Based on segment dictionary", `${dictionaryEntry.segment} is an allowed segment${dictionaryEntry.lifecycleStage ? ` for ${dictionaryEntry.lifecycleStage} lifecycle records` : ""}.`, "direct", dictionaryEntry.sourceName),
+        };
+      }
     }
 
+    // CRM reference upgrade: works for both keyword candidates and no-signal records.
     const referenceRow = matchReferenceRow(record, context);
     if (referenceRow?.segment && isValidReferenceValue(referenceRow.segment)) {
       return {
         ...baseSuggestion,
         suggestedValue: canonicalSegment(referenceRow.segment),
         confidence: 86,
-        rationale: "Trusted CRM reference export shows the same account/domain with this populated segment. Keep the recommendation review-first before applying it.",
+        rationale: `Trusted CRM reference export shows this account/domain assigned to the "${canonicalSegment(referenceRow.segment)}" segment. Keep review-first before applying — source record was blank.`,
         reviewState: "needs_approval",
         basis: basis("crm_reference", "Based on reference CRM pattern", `Matched prior clean CRM row for ${referenceRow.domain || referenceRow.account}.`, "strong", referenceRow.sourceName),
       };

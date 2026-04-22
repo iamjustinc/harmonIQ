@@ -65,48 +65,18 @@ function standardizeStateValue(state: string): string {
 }
 
 function suggestOwner(record: CRMRecord): ResolutionSuggestion {
+  // No named rep is ever suggested from state/segment heuristics alone.
+  // A named owner requires a direct match in an uploaded ownership rules file
+  // or a strong match in an uploaded CRM reference export.
+  // contextualizeSuggestion() is the only path to a named suggestion.
   const state = standardizeStateValue(record.state);
-  const segment = record.segment.trim().toLowerCase();
-
-  if (["CA", "WA", "OR"].includes(state)) {
-    const owner = segment === "enterprise" ? "Noah Kim" : "Olivia Park";
-    const territory = segment === "enterprise" ? "West Enterprise" : "West Commercial";
-    return {
-      field: "owner",
-      suggestedValue: owner,
-      confidence: segment === "enterprise" ? 84 : 78,
-      rationale: `State field (${state}) maps to West territory. ${segment === "enterprise" ? "Enterprise segment" : "Segment"} aligns with the ${territory} ownership pattern in this dataset. No ownership rules file is loaded — treat as an inferred candidate, not a confirmed assignment.`,
-      reviewState: "needs_approval",
-    };
-  }
-
-  if (["TX", "FL", "GA"].includes(state)) {
-    const owner = segment === "smb" ? "Liam Carter" : "Sofia Martinez";
-    const territory = segment === "smb" ? "South Commercial" : "South Enterprise/Growth";
-    return {
-      field: "owner",
-      suggestedValue: owner,
-      confidence: segment === "smb" ? 81 : 76,
-      rationale: `State field (${state}) maps to South territory. Segment pattern aligns with the ${territory} ownership seen across comparable records. No ownership rules file is loaded — confirm before applying.`,
-      reviewState: "needs_approval",
-    };
-  }
-
-  if (["NY", "NJ", "VA"].includes(state)) {
-    return {
-      field: "owner",
-      suggestedValue: "Lucas Rivera",
-      confidence: 79,
-      rationale: `State field (${state}) maps to Northeast territory. Northeast accounts in this dataset follow a pattern consistent with Lucas Rivera. No ownership rules file is loaded — verify before applying.`,
-      reviewState: "needs_approval",
-    };
-  }
-
+  const stateLabel = state || record.state?.trim() || "unknown";
+  const segmentLabel = record.segment?.trim() || "no segment";
   return {
     field: "owner",
-    suggestedValue: "Unassigned - Review",
-    confidence: 58,
-    rationale: `State (${record.state?.trim() || "blank"}) does not match a recognizable territory pattern and no ownership rules file is loaded. The safest value flags the record for manual assignment without routing it prematurely.`,
+    suggestedValue: "Needs manual assignment",
+    confidence: 40,
+    rationale: `No ownership rules file or CRM reference export is loaded. State (${stateLabel}) and segment (${segmentLabel}) are present but insufficient to identify a rep without a verified routing source. Upload an ownership rules file to enable grounded suggestions.`,
     reviewState: "review_required",
   };
 }
@@ -243,6 +213,10 @@ const ENTERPRISE_KEYWORDS = ["health", "bio", "medical", "labs", "systems", "sec
 const SMB_KEYWORDS = ["retail", "foods", "travel", "living", "supply", "care"] as const;
 
 function suggestSegment(record: CRMRecord): ResolutionSuggestion {
+  // Keyword signals are weak — they provide a candidate tier worth reviewing,
+  // but are never strong enough for needs_approval without a segment dictionary
+  // or CRM reference to validate the inference.
+  // contextualizeSuggestion() upgrades these when a segment dictionary is loaded.
   const name = record.account_name.toLowerCase();
   const domain = record.domain.toLowerCase();
 
@@ -251,14 +225,14 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
 
   if (matchedEnterpriseKeyword ?? enterpriseDomainTld) {
     const signal = matchedEnterpriseKeyword
-      ? `Account name contains "${matchedEnterpriseKeyword}"`
-      : `Domain ends in ${enterpriseDomainTld}`;
+      ? `account name contains "${matchedEnterpriseKeyword}"`
+      : `domain ends in ${enterpriseDomainTld}`;
     return {
       field: "segment",
       suggestedValue: "Enterprise",
-      confidence: 82,
-      rationale: `${signal}, which correlates with Enterprise accounts in this dataset. No segment dictionary is loaded — confirm the tier before applying.`,
-      reviewState: "needs_approval",
+      confidence: 62,
+      rationale: `Weak keyword signal only: ${signal}. No segment dictionary is loaded to validate this inference. This is a candidate for review — confirm the segment tier with your team before applying.`,
+      reviewState: "review_required",
     };
   }
 
@@ -267,17 +241,18 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
     return {
       field: "segment",
       suggestedValue: "SMB",
-      confidence: 76,
-      rationale: `Account name contains "${matchedSmbKeyword}", which correlates with SMB accounts in this dataset. No segment dictionary is loaded — business confirmation is still required.`,
-      reviewState: "needs_approval",
+      confidence: 55,
+      rationale: `Weak keyword signal only: account name contains "${matchedSmbKeyword}". No segment dictionary is loaded to validate this. Confirm with your segment definitions before applying.`,
+      reviewState: "review_required",
     };
   }
 
+  // No keyword or domain signal at all — do not guess a named tier.
   return {
     field: "segment",
-    suggestedValue: "Mid-Market",
-    confidence: 66,
-    rationale: "No keyword or domain signal matched the Enterprise or SMB patterns in this dataset. Mid-Market is the fallback candidate based on record similarity. Confidence is low — manual review required before applying.",
+    suggestedValue: "Needs segment review",
+    confidence: 32,
+    rationale: "No account-name keyword or domain signal matched any segment pattern, and no segment dictionary is loaded. A segment cannot be inferred without additional context. Upload a segment dictionary or assign manually.",
     reviewState: "review_required",
   };
 }

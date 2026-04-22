@@ -83,6 +83,23 @@ type ManualDecision = "suggested" | "manual" | "unchanged";
 
 let manualChangeCounter = 1;
 
+/**
+ * Returns true when a suggested value is a placeholder (no real evidence produced
+ * a named value). These must not be pre-filled in drafts or accepted via
+ * "Use suggestion" — the user must supply a value manually.
+ */
+function isPlaceholderSuggestion(value: string): boolean {
+  if (!value) return true;
+  const lower = value.toLowerCase();
+  return (
+    lower.startsWith("needs") ||
+    lower.startsWith("awaiting") ||
+    lower.startsWith("no strong") ||
+    lower === "unassigned - review" ||
+    lower === "flag for manual correction"
+  );
+}
+
 function suggestionStateLabel(suggestion: ResolutionSuggestion): string {
   if (suggestion.reviewState === "deterministic") return "Deterministic";
   if (suggestion.reviewState === "needs_approval") return "Needs approval";
@@ -358,7 +375,11 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                 <td className="px-4 py-3">
                   <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{row.current}</span>
                 </td>
-                <td className="px-4 py-3 text-xs font-semibold text-slate-800">{row.suggestedValue}</td>
+                <td className="px-4 py-3 text-xs font-semibold">
+                  {isPlaceholderSuggestion(row.suggestedValue)
+                    ? <span className="italic text-amber-700">{row.suggestedValue}</span>
+                    : <span className="text-slate-800">{row.suggestedValue}</span>}
+                </td>
                 <td className="px-4 py-3">
                   <ConfidenceDots pct={row.confidence} />
                 </td>
@@ -368,7 +389,11 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                   {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-400">{row.basisDetail}</p> : null}
                 </td>
                 <td className="px-4 py-3">
-                  <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
+                  <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${
+                    isPlaceholderSuggestion(row.suggestedValue)
+                      ? "border-amber-200 bg-amber-50 text-amber-700"
+                      : "border-slate-200 bg-slate-50 text-slate-600"
+                  }`}>
                     {row.reviewState}
                   </span>
                   <p className="mt-1 text-[11px] text-slate-400">{row.issue}</p>
@@ -517,8 +542,14 @@ function ManualFixDrawer({
     Object.fromEntries(rows.map((row) => [
       row.id,
       {
-        value: row.suggestedValue || row.currentValue,
-        decision: row.suggestedValue ? "suggested" : "unchanged",
+        // Placeholder suggestions must not be pre-filled — start as unchanged
+        // so the user is not accidentally accepting a non-evidenced value.
+        value: (row.suggestedValue && !isPlaceholderSuggestion(row.suggestedValue))
+          ? row.suggestedValue
+          : row.currentValue,
+        decision: (row.suggestedValue && !isPlaceholderSuggestion(row.suggestedValue))
+          ? "suggested"
+          : "unchanged",
       },
     ]))
   ));
@@ -534,8 +565,12 @@ function ManualFixDrawer({
     setDrafts(Object.fromEntries(rows.map((row) => [
       row.id,
       {
-        value: row.suggestedValue || row.currentValue,
-        decision: row.suggestedValue ? "suggested" : "unchanged",
+        value: (row.suggestedValue && !isPlaceholderSuggestion(row.suggestedValue))
+          ? row.suggestedValue
+          : row.currentValue,
+        decision: (row.suggestedValue && !isPlaceholderSuggestion(row.suggestedValue))
+          ? "suggested"
+          : "unchanged",
       },
     ])));
   };
@@ -635,11 +670,22 @@ function ManualFixDrawer({
                         </div>
                         <div>
                           <dt className="font-bold uppercase tracking-wide text-slate-400">Suggested value</dt>
-                          <dd className="mt-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1 font-semibold text-indigo-800">
-                            {row.suggestedValue || "No safe suggestion"}
-                          </dd>
+                          {isPlaceholderSuggestion(row.suggestedValue) ? (
+                            <dd className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs font-semibold italic text-amber-800">
+                              {row.suggestedValue || "No evidence-based suggestion"}
+                            </dd>
+                          ) : (
+                            <dd className="mt-1 rounded border border-indigo-200 bg-indigo-50 px-2 py-1 font-semibold text-indigo-800">
+                              {row.suggestedValue}
+                            </dd>
+                          )}
                         </div>
                       </dl>
+                      {isPlaceholderSuggestion(row.suggestedValue) ? (
+                        <p className="mt-2 text-[11px] font-bold text-amber-700">
+                          No strong evidence found — enter a value manually or leave unchanged for the audit log.
+                        </p>
+                      ) : null}
                     </div>
 
                     <div className="space-y-2.5">
@@ -659,7 +705,7 @@ function ManualFixDrawer({
                       <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
                         <button
                           type="button"
-                          disabled={!row.suggestedValue}
+                          disabled={!row.suggestedValue || isPlaceholderSuggestion(row.suggestedValue)}
                           onClick={() => updateDraft(row, row.suggestedValue, "suggested")}
                           className="rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
                         >
