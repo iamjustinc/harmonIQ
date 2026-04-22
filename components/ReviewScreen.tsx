@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
+import { fetchAIRecommendation, type AIRecommendationRequest, type AIRecommendationResult } from "@/lib/aiRecommendation";
 import { DETECTED, generateChanges } from "@/lib/issueDetection";
 import { contextualizeSuggestion, EMPTY_REFERENCE_CONTEXT, suggestionBasisLabel } from "@/lib/referenceContext";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
@@ -351,6 +352,94 @@ function buildManualChange(
     userDecision: "Accepted",
   };
 }
+
+// ─── AI recommendation helpers ───────────────────────────────────────────────
+
+const AI_ISSUE_TYPES = new Set<IssueType>(["missing_owner", "missing_segment"]);
+
+function buildOwnerCandidates(ctx: ReferenceContext): string[] {
+  const candidates = new Set<string>();
+  for (const rule of ctx.ownershipRules) {
+    if (rule.owner) candidates.add(rule.owner);
+  }
+  for (const row of ctx.crmReferenceRows) {
+    if (row.owner) candidates.add(row.owner);
+  }
+  return [...candidates];
+}
+
+function buildSegmentCandidates(ctx: ReferenceContext): string[] {
+  const candidates = new Set<string>(["Enterprise", "Mid-Market", "SMB", "Startup"]);
+  for (const entry of ctx.segmentDictionary) {
+    for (const val of entry.allowedValues) candidates.add(val);
+  }
+  for (const row of ctx.crmReferenceRows) {
+    if (row.segment) candidates.add(row.segment);
+  }
+  return [...candidates];
+}
+
+function basisStrengthToAIBasisType(strength: string | undefined): string {
+  if (strength === "direct" || strength === "deterministic") return "direct_rule";
+  if (strength === "strong") return "reference_pattern";
+  if (strength === "fallback") return "weak_heuristic";
+  return "no_basis";
+}
+
+// ─── AI Recommendation Panel ─────────────────────────────────────────────────
+
+const CONFIDENCE_BAND_COLORS: Record<string, string> = {
+  high: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  medium: "bg-indigo-100 text-indigo-800 border-indigo-200",
+  low: "bg-amber-100 text-amber-800 border-amber-200",
+  insufficient: "bg-slate-100 text-slate-600 border-slate-200",
+};
+
+function AIRecommendationPanel({ recommendation }: { recommendation: AIRecommendationResult }) {
+  const bandColor = CONFIDENCE_BAND_COLORS[recommendation.confidenceBand] ?? CONFIDENCE_BAND_COLORS.insufficient;
+
+  return (
+    <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
+      <div className="flex items-center gap-1.5">
+        <p className="text-[10px] font-black uppercase tracking-wider text-violet-600">AI Analysis</p>
+        {/* sparkle icon */}
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M6 1 7 4.5 10.5 5.5 7 6.5 6 10 5 6.5 1.5 5.5 5 4.5Z" fill="currentColor" className="text-violet-400" />
+        </svg>
+      </div>
+
+      {recommendation.recommendedValue ? (
+        <p className="mt-2 text-sm font-black text-violet-950">{recommendation.recommendedValue}</p>
+      ) : (
+        <p className="mt-2 text-xs font-bold italic text-amber-700">Manual review required — insufficient evidence</p>
+      )}
+
+      <div className="mt-2">
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${bandColor}`}>
+          {recommendation.confidenceBand} confidence
+        </span>
+      </div>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-violet-900">{recommendation.rationale}</p>
+
+      {recommendation.evidenceSummary ? (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-violet-700">{recommendation.evidenceSummary}</p>
+      ) : null}
+
+      {recommendation.cautionNote ? (
+        <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] leading-relaxed text-amber-800">
+          ⚠ {recommendation.cautionNote}
+        </p>
+      ) : null}
+
+      {recommendation.manualReviewRequired && !recommendation.recommendedValue ? (
+        <p className="mt-2 text-[11px] font-bold text-amber-700">Assign this field manually before export.</p>
+      ) : null}
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function FlagTable({ issueType, referenceContext }: { issueType: IssueType; referenceContext: ReferenceContext }) {
   const rows = getFlagRows(issueType, referenceContext);
@@ -796,6 +885,89 @@ export default function ReviewScreen({
   const canManualFix = supportsManualFix(activeIssueType) && manualFixRows.length > 0;
   const [manualFixOpen, setManualFixOpen] = useState(false);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
+  const [aiRecommendation, setAiRecommendation] = useState<AIRecommendationResult | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    if (!AI_ISSUE_TYPES.has(activeIssueType)) {
+      setAiRecommendation(null);
+      setAiLoading(false);
+      return;
+    }
+
+    const preview = getSuggestionPreview(activeIssueType, activeReferenceContext);
+    const firstRecord =
+      activeIssueType === "missing_owner"
+        ? DETECTED.missingOwner[0]?.record
+        : DETECTED.missingSegments[0]?.record;
+
+    if (!preview || !firstRecord) {
+      setAiRecommendation(null);
+      setAiLoading(false);
+      return;
+    }
+
+    const candidateValues =
+      activeIssueType === "missing_owner"
+        ? buildOwnerCandidates(activeReferenceContext)
+        : buildSegmentCandidates(activeReferenceContext);
+
+    // With no candidates, the AI would be forced to return null — skip the call.
+    if (candidateValues.length === 0) {
+      setAiRecommendation(null);
+      setAiLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAiLoading(true);
+    setAiRecommendation(null);
+
+    const ctx = activeReferenceContext;
+    const basisStrength = preview.basis?.strength;
+
+    const request: AIRecommendationRequest = {
+      issueType: activeIssueType as "missing_owner" | "missing_segment",
+      workflowMode,
+      recordContext: {
+        accountName: firstRecord.account_name ?? "",
+        domain: firstRecord.domain ?? "",
+        state: firstRecord.state ?? "",
+        segment: firstRecord.segment ?? "",
+      },
+      candidateValues,
+      existingSuggestion: {
+        suggestedValue: preview.suggestedValue,
+        confidence: preview.confidence,
+        basisType: basisStrengthToAIBasisType(basisStrength),
+        basisLabel: suggestionBasisLabel(preview),
+        basisDetail: preview.basis?.detail ?? "",
+        reviewState: preview.reviewState,
+      },
+      evidenceSummary: {
+        hasOwnershipRules: ctx.ownershipRules.length > 0,
+        hasSegmentDictionary: ctx.segmentDictionary.length > 0,
+        hasCrmReference: ctx.crmReferenceRows.length > 0,
+        matchedRuleDetail:
+          (basisStrength === "direct" || basisStrength === "deterministic") && preview.basis?.detail
+            ? preview.basis.detail
+            : undefined,
+        matchedReferenceDetail:
+          basisStrength === "strong" && preview.basis?.detail ? preview.basis.detail : undefined,
+      },
+    };
+
+    fetchAIRecommendation(request).then((result) => {
+      if (!cancelled) {
+        setAiRecommendation(result);
+        setAiLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeIssueType, workflowMode, referenceContext]); // eslint-disable-line react-hooks/exhaustive-deps
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
   const approvedIssueCount = Object.values(issueStatuses).filter((item) => item === "approved").length;
@@ -1070,6 +1242,17 @@ export default function ReviewScreen({
                 ) : null}
                 <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
               </section>
+            ) : null}
+
+            {aiLoading ? (
+              <section className="animate-pulse rounded-lg border border-violet-100 bg-violet-50/50 p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-400">AI Analysis</p>
+                <div className="mt-2 h-3 w-3/4 rounded bg-violet-100" />
+                <div className="mt-1.5 h-3 w-1/2 rounded bg-violet-100" />
+                <div className="mt-1.5 h-3 w-2/3 rounded bg-violet-100" />
+              </section>
+            ) : aiRecommendation ? (
+              <AIRecommendationPanel recommendation={aiRecommendation} />
             ) : null}
 
             <section>
