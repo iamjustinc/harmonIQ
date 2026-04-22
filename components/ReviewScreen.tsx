@@ -5,6 +5,9 @@ import type { IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, Wo
 import type { ApprovedChange } from "@/lib/types";
 import {
   fetchAIRecommendationWithStatus,
+  type AIBasisType,
+  type AIConfidenceBand,
+  type AIRecommendationCandidate,
   type AIRecommendationFetchStatus,
   type AIRecommendationRequest,
   type AIRecommendationResult,
@@ -362,33 +365,256 @@ function buildManualChange(
 
 const AI_ISSUE_TYPES = new Set<IssueType>(["missing_owner", "missing_segment"]);
 
-function buildOwnerCandidates(ctx: ReferenceContext): string[] {
-  const candidates = new Set<string>();
-  for (const rule of ctx.ownershipRules) {
-    if (rule.owner) candidates.add(rule.owner);
-  }
-  for (const row of ctx.crmReferenceRows) {
-    if (row.owner) candidates.add(row.owner);
-  }
-  return [...candidates];
+const BASIS_RANK: Record<AIBasisType, number> = {
+  direct_rule: 4,
+  reference_pattern: 3,
+  dataset_pattern: 2,
+  weak_heuristic: 1,
+  no_basis: 0,
+};
+
+function normalizeCompare(value: string | undefined): string {
+  return (value ?? "").trim().toLowerCase();
 }
 
-function buildSegmentCandidates(ctx: ReferenceContext): string[] {
-  const candidates = new Set<string>(["Enterprise", "Mid-Market", "SMB", "Startup"]);
-  for (const entry of ctx.segmentDictionary) {
-    for (const val of entry.allowedValues) candidates.add(val);
-  }
-  for (const row of ctx.crmReferenceRows) {
-    if (row.segment) candidates.add(row.segment);
-  }
-  return [...candidates];
+function normalizeState(value: string | undefined): string {
+  const state = normalizeCompare(value);
+  const map: Record<string, string> = {
+    california: "CA", calif: "CA", "calif.": "CA", cal: "CA",
+    washington: "WA", wash: "WA", "wash.": "WA",
+    oregon: "OR",
+    texas: "TX", tex: "TX", "tex.": "TX",
+    florida: "FL", "fla.": "FL", georgia: "GA",
+    "new york": "NY", "n.y.": "NY", "n.y": "NY", "newyork": "NY",
+    "new jersey": "NJ", "n.j.": "NJ", virginia: "VA",
+    illinois: "IL", ill: "IL", "ill.": "IL",
+  };
+  if (!state) return "";
+  if (/^[a-z]{2}$/.test(state)) return state.toUpperCase();
+  return map[state] ?? "";
 }
 
-function basisStrengthToAIBasisType(strength: string | undefined): string {
+function regionForState(value: string | undefined): string {
+  const state = normalizeState(value);
+  if (["CA", "WA", "OR"].includes(state)) return "West";
+  if (["TX", "FL", "GA"].includes(state)) return "South";
+  if (["NY", "NJ", "VA"].includes(state)) return "Northeast";
+  if (["IL", "OH", "MI", "MN", "CO"].includes(state)) return "Central";
+  return "";
+}
+
+function canonicalSegment(value: string | undefined): string {
+  const segment = normalizeCompare(value);
+  if (segment === "smb" || segment === "small business") return "SMB";
+  if (segment === "mid-market" || segment === "mid market" || segment === "growth") return "Mid-Market";
+  if (segment === "enterprise" || segment === "strategic") return "Enterprise";
+  return (value ?? "").trim();
+}
+
+function sourceActive(ctx: ReferenceContext, type: "ownership_rules" | "segment_dictionary" | "crm_reference"): boolean {
+  return ctx.sources.some((source) => source.type === type && source.active);
+}
+
+function basisStrengthToAIBasisType(strength: string | undefined): AIBasisType {
   if (strength === "direct" || strength === "deterministic") return "direct_rule";
   if (strength === "strong") return "reference_pattern";
   if (strength === "fallback") return "weak_heuristic";
   return "no_basis";
+}
+
+function basisToConfidenceBand(basisType: AIBasisType): AIConfidenceBand {
+  if (basisType === "direct_rule") return "high";
+  if (basisType === "reference_pattern" || basisType === "dataset_pattern") return "medium";
+  if (basisType === "weak_heuristic") return "low";
+  return "insufficient";
+}
+
+function upsertCandidate(candidates: Map<string, AIRecommendationCandidate>, candidate: AIRecommendationCandidate) {
+  const current = candidates.get(candidate.value);
+  if (!current || BASIS_RANK[candidate.basisType] > BASIS_RANK[current.basisType]) {
+    candidates.set(candidate.value, candidate);
+  }
+}
+
+function addExistingSuggestionCandidate(
+  candidates: Map<string, AIRecommendationCandidate>,
+  preview: ResolutionSuggestion
+) {
+  if (isPlaceholderSuggestion(preview.suggestedValue)) return;
+  const basisType = basisStrengthToAIBasisType(preview.basis?.strength);
+  upsertCandidate(candidates, {
+    value: preview.suggestedValue,
+    basisType,
+    basisLabel: suggestionBasisLabel(preview),
+    basisDetail: preview.basis?.detail ?? "Candidate produced by deterministic harmonIQ issue logic.",
+    confidenceBand: basisToConfidenceBand(basisType),
+    source: preview.basis?.sourceName ?? "Deterministic issue logic",
+    matchSummary: `${preview.confidence}% deterministic confidence; ${preview.reviewState.replace(/_/g, " ")}.`,
+  });
+}
+
+function buildDatasetOwnerSignals(recordDomain: string) {
+  return DETECTED.duplicates
+    .filter((cluster) => normalizeCompare(cluster.domain) === normalizeCompare(recordDomain))
+    .flatMap((cluster) => cluster.records)
+    .filter((record) => record.owner && !isPlaceholderSuggestion(record.owner))
+    .map((record) => ({
+      value: record.owner,
+      detail: `${record.record_id} shares domain ${record.domain}`,
+    }));
+}
+
+function buildDatasetSegmentSignals(recordDomain: string) {
+  return DETECTED.duplicates
+    .filter((cluster) => normalizeCompare(cluster.domain) === normalizeCompare(recordDomain))
+    .flatMap((cluster) => cluster.records)
+    .filter((record) => record.segment && !isPlaceholderSuggestion(record.segment))
+    .map((record) => ({
+      value: canonicalSegment(record.segment),
+      detail: `${record.record_id} shares domain ${record.domain}`,
+    }));
+}
+
+function buildAIRecommendationEvidencePackage(
+  issueType: IssueType,
+  record: { account_name: string; domain: string; state: string; segment: string },
+  preview: ResolutionSuggestion,
+  ctx: ReferenceContext
+): { candidateValues: string[]; candidates: AIRecommendationCandidate[]; currentDatasetSignals: string[] } {
+  const candidates = new Map<string, AIRecommendationCandidate>();
+  const currentDatasetSignals: string[] = [];
+  const recordRegion = regionForState(record.state);
+  const recordSegment = canonicalSegment(record.segment || preview.suggestedValue);
+
+  addExistingSuggestionCandidate(candidates, preview);
+
+  if (issueType === "missing_owner") {
+    if (sourceActive(ctx, "ownership_rules")) {
+      for (const rule of ctx.ownershipRules) {
+        if (!rule.owner || isPlaceholderSuggestion(rule.owner)) continue;
+        const ruleRegion = normalizeCompare(rule.region || rule.territory);
+        const regionMatches = recordRegion && (ruleRegion === normalizeCompare(recordRegion) || normalizeCompare(rule.territory).includes(normalizeCompare(recordRegion)));
+        const segmentMatches = rule.segment && normalizeCompare(rule.segment) === normalizeCompare(recordSegment);
+        if (!regionMatches && !segmentMatches) continue;
+        const basisType: AIBasisType = regionMatches && segmentMatches ? "direct_rule" : "weak_heuristic";
+        upsertCandidate(candidates, {
+          value: rule.owner,
+          basisType,
+          basisLabel: regionMatches && segmentMatches ? "Ownership rule match" : "Partial ownership rule match",
+          basisDetail: `${rule.territory || rule.region || "Routing rule"}${rule.segment ? ` / ${rule.segment}` : ""}${rule.queue ? ` / ${rule.queue}` : ""}`,
+          confidenceBand: basisToConfidenceBand(basisType),
+          source: rule.sourceName,
+          matchSummary: regionMatches && segmentMatches
+            ? "Rule matches both account region and segment."
+            : "Rule matches only part of the account context; review carefully.",
+        });
+      }
+    }
+
+    if (sourceActive(ctx, "crm_reference")) {
+      for (const row of ctx.crmReferenceRows) {
+        if (!row.owner || isPlaceholderSuggestion(row.owner)) continue;
+        const domainMatches = normalizeCompare(row.domain) && normalizeCompare(row.domain) === normalizeCompare(record.domain);
+        const accountMatches = normalizeCompare(row.account) && normalizeCompare(record.account_name).includes(normalizeCompare(row.account));
+        if (!domainMatches && !accountMatches) continue;
+        upsertCandidate(candidates, {
+          value: row.owner,
+          basisType: "reference_pattern",
+          basisLabel: "Clean CRM reference match",
+          basisDetail: `${row.account || "Reference account"} / ${row.domain || "no domain"} / ${row.territory || "no territory"}`,
+          confidenceBand: "medium",
+          source: row.sourceName,
+          matchSummary: domainMatches ? "Reference row matches account domain." : "Reference row matches account name.",
+        });
+      }
+    }
+
+    for (const signal of buildDatasetOwnerSignals(record.domain)) {
+      currentDatasetSignals.push(`${signal.value}: ${signal.detail}`);
+      upsertCandidate(candidates, {
+        value: signal.value,
+        basisType: "dataset_pattern",
+        basisLabel: "Current dataset duplicate pattern",
+        basisDetail: signal.detail,
+        confidenceBand: "medium",
+        source: "Uploaded CRM dataset",
+        matchSummary: "Same-domain record in the uploaded dataset has this owner populated.",
+      });
+    }
+  }
+
+  if (issueType === "missing_segment") {
+    if (sourceActive(ctx, "segment_dictionary")) {
+      for (const entry of ctx.segmentDictionary) {
+        const values = [entry.segment, ...entry.allowedValues].filter(Boolean).map(canonicalSegment);
+        for (const value of values) {
+          upsertCandidate(candidates, {
+            value,
+            basisType: normalizeCompare(value) === normalizeCompare(preview.suggestedValue) ? "direct_rule" : "weak_heuristic",
+            basisLabel: "Approved segment taxonomy",
+            basisDetail: `${entry.definition || "Allowed segment"}${entry.lifecycleStage ? ` / ${entry.lifecycleStage}` : ""}`,
+            confidenceBand: normalizeCompare(value) === normalizeCompare(preview.suggestedValue) ? "high" : "low",
+            source: entry.sourceName,
+            matchSummary: normalizeCompare(value) === normalizeCompare(preview.suggestedValue)
+              ? "Deterministic candidate is present in the approved dictionary."
+              : "Allowed taxonomy option, but not directly matched to this row.",
+          });
+        }
+      }
+    } else {
+      for (const value of ["Enterprise", "Mid-Market", "SMB"]) {
+        upsertCandidate(candidates, {
+          value,
+          basisType: normalizeCompare(value) === normalizeCompare(preview.suggestedValue) ? "weak_heuristic" : "no_basis",
+          basisLabel: "Default segment taxonomy",
+          basisDetail: "Built-in harmonIQ segment set used when no dictionary is attached.",
+          confidenceBand: normalizeCompare(value) === normalizeCompare(preview.suggestedValue) ? "low" : "insufficient",
+          source: "Default CRM taxonomy",
+          matchSummary: normalizeCompare(value) === normalizeCompare(preview.suggestedValue)
+            ? "Matches deterministic heuristic."
+            : "Available bounded value with no row-specific evidence.",
+        });
+      }
+    }
+
+    if (sourceActive(ctx, "crm_reference")) {
+      for (const row of ctx.crmReferenceRows) {
+        if (!row.segment || isPlaceholderSuggestion(row.segment)) continue;
+        const domainMatches = normalizeCompare(row.domain) && normalizeCompare(row.domain) === normalizeCompare(record.domain);
+        const accountMatches = normalizeCompare(row.account) && normalizeCompare(record.account_name).includes(normalizeCompare(row.account));
+        if (!domainMatches && !accountMatches) continue;
+        upsertCandidate(candidates, {
+          value: canonicalSegment(row.segment),
+          basisType: "reference_pattern",
+          basisLabel: "Clean CRM reference match",
+          basisDetail: `${row.account || "Reference account"} / ${row.domain || "no domain"} / ${row.territory || "no territory"}`,
+          confidenceBand: "medium",
+          source: row.sourceName,
+          matchSummary: domainMatches ? "Reference row matches account domain." : "Reference row matches account name.",
+        });
+      }
+    }
+
+    for (const signal of buildDatasetSegmentSignals(record.domain)) {
+      currentDatasetSignals.push(`${signal.value}: ${signal.detail}`);
+      upsertCandidate(candidates, {
+        value: signal.value,
+        basisType: "dataset_pattern",
+        basisLabel: "Current dataset duplicate pattern",
+        basisDetail: signal.detail,
+        confidenceBand: "medium",
+        source: "Uploaded CRM dataset",
+        matchSummary: "Same-domain record in the uploaded dataset has this segment populated.",
+      });
+    }
+  }
+
+  const sortedCandidates = [...candidates.values()].sort((a, b) => BASIS_RANK[b.basisType] - BASIS_RANK[a.basisType]);
+  return {
+    candidates: sortedCandidates,
+    candidateValues: sortedCandidates.map((candidate) => candidate.value),
+    currentDatasetSignals,
+  };
 }
 
 // ─── AI Recommendation Panel ─────────────────────────────────────────────────
@@ -400,8 +626,20 @@ const CONFIDENCE_BAND_COLORS: Record<string, string> = {
   insufficient: "bg-slate-100 text-slate-600 border-slate-200",
 };
 
-function AIRecommendationPanel({ recommendation, provider }: { recommendation: AIRecommendationResult; provider?: "openai" }) {
+function AIRecommendationPanel({
+  recommendation,
+  provider,
+  candidates,
+  deterministicValue,
+}: {
+  recommendation: AIRecommendationResult;
+  provider?: "openai";
+  candidates: AIRecommendationCandidate[];
+  deterministicValue: string;
+}) {
   const bandColor = CONFIDENCE_BAND_COLORS[recommendation.confidenceBand] ?? CONFIDENCE_BAND_COLORS.insufficient;
+  const selectedCandidate = candidates.find((candidate) => candidate.value === recommendation.recommendedValue);
+  const shownCandidates = candidates.slice(0, 4);
 
   return (
     <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
@@ -420,7 +658,13 @@ function AIRecommendationPanel({ recommendation, provider }: { recommendation: A
       </div>
 
       {recommendation.recommendedValue ? (
-        <p className="mt-2 text-sm font-black text-violet-950">{recommendation.recommendedValue}</p>
+        <div className="mt-2 rounded-md border border-violet-200 bg-white/70 px-2 py-1.5">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Selected candidate</p>
+          <p className="mt-0.5 text-sm font-black text-violet-950">{recommendation.recommendedValue}</p>
+          {selectedCandidate ? (
+            <p className="mt-1 text-[11px] leading-relaxed text-violet-700">{selectedCandidate.matchSummary}</p>
+          ) : null}
+        </div>
       ) : (
         <p className="mt-2 text-xs font-bold italic text-amber-700">Manual review required — insufficient evidence</p>
       )}
@@ -429,9 +673,42 @@ function AIRecommendationPanel({ recommendation, provider }: { recommendation: A
         <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${bandColor}`}>
           {recommendation.confidenceBand} confidence
         </span>
+        <span className="ml-1.5 rounded-full border border-violet-200 bg-white/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700">
+          Basis: {recommendation.basisType.replace(/_/g, " ")}
+        </span>
       </div>
 
       <p className="mt-2 text-[11px] leading-relaxed text-violet-900">{recommendation.rationale}</p>
+      {recommendation.manualReviewRequired ? (
+        <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] font-bold text-amber-800">
+          Manual review required before this value can be trusted for export.
+        </p>
+      ) : null}
+
+      <div className="mt-2 rounded-md border border-violet-100 bg-white/60 p-2">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">Bounded candidates reviewed</p>
+          <span className="text-[10px] font-bold text-violet-600">{candidates.length}</span>
+        </div>
+        <div className="mt-1.5 space-y-1">
+          {shownCandidates.map((candidate) => (
+            <div key={`${candidate.value}-${candidate.source}`} className="flex items-start justify-between gap-2 rounded border border-slate-100 bg-white px-2 py-1">
+              <div className="min-w-0">
+                <p className={`truncate text-[11px] font-bold ${candidate.value === recommendation.recommendedValue ? "text-violet-800" : "text-slate-700"}`}>
+                  {candidate.value}
+                </p>
+                <p className="truncate text-[10px] text-slate-500">{candidate.basisLabel} · {candidate.source}</p>
+              </div>
+              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                {candidate.confidenceBand}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-violet-700">
+          Deterministic preview: {deterministicValue || "No deterministic value"}. AI output is not applied until the issue type is approved.
+        </p>
+      </div>
 
       {recommendation.evidenceSummary ? (
         <p className="mt-1.5 text-[11px] leading-relaxed text-violet-700">{recommendation.evidenceSummary}</p>
@@ -920,6 +1197,7 @@ export default function ReviewScreen({
   const [aiStatus, setAiStatus] = useState<"idle" | "loading" | AIRecommendationFetchStatus>("idle");
   const [aiStatusMessage, setAiStatusMessage] = useState("");
   const [aiProvider, setAiProvider] = useState<"openai" | undefined>(undefined);
+  const [aiCandidates, setAiCandidates] = useState<AIRecommendationCandidate[]>([]);
 
   useEffect(() => {
     if (!AI_ISSUE_TYPES.has(activeIssueType)) {
@@ -927,6 +1205,7 @@ export default function ReviewScreen({
       setAiStatus("idle");
       setAiStatusMessage("");
       setAiProvider(undefined);
+      setAiCandidates([]);
       return;
     }
 
@@ -941,13 +1220,13 @@ export default function ReviewScreen({
       setAiStatus("fallback");
       setAiStatusMessage("AI fallback active; no reviewable missing-value record is available for this issue type.");
       setAiProvider(undefined);
+      setAiCandidates([]);
       return;
     }
 
-    const candidateValues =
-      activeIssueType === "missing_owner"
-        ? buildOwnerCandidates(activeReferenceContext)
-        : buildSegmentCandidates(activeReferenceContext);
+    const evidencePackage = buildAIRecommendationEvidencePackage(activeIssueType, firstRecord, preview, activeReferenceContext);
+    const { candidateValues, candidates, currentDatasetSignals } = evidencePackage;
+    setAiCandidates(candidates);
 
     // With no candidates, the AI would be forced to return null — skip the call.
     if (candidateValues.length === 0) {
@@ -977,6 +1256,7 @@ export default function ReviewScreen({
         segment: firstRecord.segment ?? "",
       },
       candidateValues,
+      candidates,
       existingSuggestion: {
         suggestedValue: preview.suggestedValue,
         confidence: preview.confidence,
@@ -986,15 +1266,21 @@ export default function ReviewScreen({
         reviewState: preview.reviewState,
       },
       evidenceSummary: {
-        hasOwnershipRules: ctx.ownershipRules.length > 0,
-        hasSegmentDictionary: ctx.segmentDictionary.length > 0,
-        hasCrmReference: ctx.crmReferenceRows.length > 0,
+        hasOwnershipRules: sourceActive(ctx, "ownership_rules"),
+        hasSegmentDictionary: sourceActive(ctx, "segment_dictionary"),
+        hasCrmReference: sourceActive(ctx, "crm_reference"),
+        activeReferenceSources: ctx.sources
+          .filter((source) => source.active)
+          .map((source) => `${source.fileName} (${source.rowCount} rows)`),
+        currentDatasetSignals,
         matchedRuleDetail:
-          (basisStrength === "direct" || basisStrength === "deterministic") && preview.basis?.detail
-            ? preview.basis.detail
-            : undefined,
+          candidates.find((candidate) => candidate.basisType === "direct_rule")?.basisDetail
+            ?? ((basisStrength === "direct" || basisStrength === "deterministic") && preview.basis?.detail
+              ? preview.basis.detail
+              : undefined),
         matchedReferenceDetail:
-          basisStrength === "strong" && preview.basis?.detail ? preview.basis.detail : undefined,
+          candidates.find((candidate) => candidate.basisType === "reference_pattern")?.basisDetail
+            ?? (basisStrength === "strong" && preview.basis?.detail ? preview.basis.detail : undefined),
       },
     };
 
@@ -1011,6 +1297,7 @@ export default function ReviewScreen({
       cancelled = true;
     };
   }, [activeIssueType, workflowMode, activeReferenceContext]);
+
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
   const approvedIssueCount = Object.values(issueStatuses).filter((item) => item === "approved").length;
@@ -1296,7 +1583,12 @@ export default function ReviewScreen({
                 <div className="mt-1.5 h-3 w-2/3 rounded bg-violet-100" />
               </section>
             ) : aiRecommendation ? (
-              <AIRecommendationPanel recommendation={aiRecommendation} provider={aiProvider} />
+              <AIRecommendationPanel
+                recommendation={aiRecommendation}
+                provider={aiProvider}
+                candidates={aiCandidates}
+                deterministicValue={suggestionPreview?.suggestedValue ?? ""}
+              />
             ) : aiStatus === "fallback" || aiStatus === "unavailable" ? (
               <AIFallbackPanel status={aiStatus} message={aiStatusMessage} />
             ) : null}

@@ -29,6 +29,7 @@ import type {
 const VALID_BASIS_TYPES: AIBasisType[] = [
   "direct_rule",
   "reference_pattern",
+  "dataset_pattern",
   "weak_heuristic",
   "no_basis",
 ];
@@ -80,18 +81,21 @@ function validateAndNormalize(
   candidates: string[]
 ): AIRecommendationResult {
   let recommendedValue: string | null = null;
+  let rejectedOutOfBounds = false;
   if (raw.recommendedValue !== null && raw.recommendedValue !== undefined) {
     const candidate = String(raw.recommendedValue).trim();
     if (candidates.includes(candidate)) {
       recommendedValue = candidate;
+    } else {
+      rejectedOutOfBounds = true;
     }
   }
 
-  const basisType: AIBasisType = isBasisType(raw.basisType)
+  const basisType: AIBasisType = rejectedOutOfBounds ? "no_basis" : isBasisType(raw.basisType)
     ? raw.basisType
     : "no_basis";
 
-  const confidenceBand: AIConfidenceBand = isConfidenceBand(raw.confidenceBand)
+  const confidenceBand: AIConfidenceBand = rejectedOutOfBounds ? "insufficient" : isConfidenceBand(raw.confidenceBand)
     ? raw.confidenceBand
     : "insufficient";
 
@@ -99,7 +103,9 @@ function validateAndNormalize(
     recommendedValue === null ? true : Boolean(raw.manualReviewRequired);
 
   const cautionNote =
-    raw.cautionNote !== null && raw.cautionNote !== undefined
+    rejectedOutOfBounds
+      ? "Model returned a value outside the bounded candidate set, so harmonIQ rejected it and kept the record in manual review."
+      : raw.cautionNote !== null && raw.cautionNote !== undefined
       ? String(raw.cautionNote)
       : null;
 
@@ -107,7 +113,9 @@ function validateAndNormalize(
     recommendedValue,
     basisType,
     confidenceBand,
-    rationale: typeof raw.rationale === "string" ? raw.rationale : "Unable to produce rationale.",
+    rationale: rejectedOutOfBounds
+      ? "AI output did not satisfy the bounded candidate rule, so no AI value is eligible for approval."
+      : typeof raw.rationale === "string" ? raw.rationale : "Unable to produce rationale.",
     manualReviewRequired,
     evidenceSummary:
       typeof raw.evidenceSummary === "string"
@@ -125,7 +133,7 @@ const SYSTEM_PROMPT = `You are a CRM data quality analyst. Evaluate structured e
 Required JSON shape:
 {
   "recommendedValue": string | null,
-  "basisType": "direct_rule" | "reference_pattern" | "weak_heuristic" | "no_basis",
+  "basisType": "direct_rule" | "reference_pattern" | "dataset_pattern" | "weak_heuristic" | "no_basis",
   "confidenceBand": "high" | "medium" | "low" | "insufficient",
   "rationale": string,
   "manualReviewRequired": boolean,
@@ -144,10 +152,11 @@ STRICT RULES:
 Evidence hierarchy:
 - direct_rule: ownership_rules file matched region + segment, OR segment dictionary validated the tier -> HIGH confidence
 - reference_pattern: clean CRM reference export matched domain or account name -> MEDIUM confidence
+- dataset_pattern: same-domain or same-account evidence from the uploaded CRM dataset -> MEDIUM or LOW confidence
 - weak_heuristic: only keyword pattern or geographic guess -> LOW confidence, manual review recommended
 - no_basis: no supporting evidence -> manualReviewRequired = true, recommendedValue = null
 
-Be concise and explicit about which evidence category matched.`;
+Compare the candidate evidence. Prefer direct_rule over reference_pattern, reference_pattern over dataset_pattern, and dataset_pattern over weak_heuristic. Be concise and explicit about which evidence category matched.`;
 
 // ─── Route handler ───────────────────────────────────────────────────────────
 
@@ -178,6 +187,7 @@ export async function POST(request: NextRequest) {
     workflowMode,
     recordContext,
     candidateValues,
+    candidates,
     existingSuggestion,
     evidenceSummary,
   } = body;
@@ -198,6 +208,25 @@ export async function POST(request: NextRequest) {
   if (evidenceSummary.matchedReferenceDetail) {
     evidenceLines.push(`Matched CRM reference: ${evidenceSummary.matchedReferenceDetail}`);
   }
+  if (evidenceSummary.activeReferenceSources.length > 0) {
+    evidenceLines.push(`Active reference sources: ${evidenceSummary.activeReferenceSources.join(", ")}`);
+  }
+  if (evidenceSummary.currentDatasetSignals.length > 0) {
+    evidenceLines.push(`Current dataset signals: ${evidenceSummary.currentDatasetSignals.join(" | ")}`);
+  }
+
+  const candidateEvidenceList =
+    candidates.length > 0
+      ? candidates.map((candidate) => [
+          `  - value: "${candidate.value}"`,
+          `    basisType: ${candidate.basisType}`,
+          `    confidenceBand: ${candidate.confidenceBand}`,
+          `    source: ${candidate.source}`,
+          `    basis: ${candidate.basisLabel}`,
+          `    detail: ${candidate.basisDetail || "(none)"}`,
+          `    match: ${candidate.matchSummary || "(none)"}`,
+        ].join("\n")).join("\n")
+      : "  (none - manual review required)";
 
   const userMessage = `Issue type: ${issueType}
 Workflow mode: ${workflowMode}
@@ -208,6 +237,9 @@ Current segment: ${recordContext.segment || "(not set)"}
 
 candidateValues:
 ${candidateList}
+
+Candidate evidence package:
+${candidateEvidenceList}
 
 Evidence:
 ${evidenceLines.join("\n")}

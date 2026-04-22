@@ -18,6 +18,7 @@ import type { IssueType, WorkflowMode } from "./types";
 export type AIBasisType =
   | "direct_rule"       // ownership rules or segment dictionary gave a match
   | "reference_pattern" // CRM reference export matched the domain or account
+  | "dataset_pattern"   // current uploaded dataset has same-domain evidence
   | "weak_heuristic"    // only geographic or keyword pattern — low confidence
   | "no_basis";         // no supporting evidence — manual review required
 
@@ -26,6 +27,16 @@ export type AIConfidenceBand =
   | "medium"       // reference pattern with no confirming rule
   | "low"          // heuristic only, proceed with caution
   | "insufficient"; // evidence insufficient, do not auto-fill
+
+export interface AIRecommendationCandidate {
+  value: string;
+  basisType: AIBasisType;
+  basisLabel: string;
+  basisDetail: string;
+  confidenceBand: AIConfidenceBand;
+  source: string;
+  matchSummary: string;
+}
 
 export interface AIRecommendationRequest {
   issueType: Extract<IssueType, "missing_owner" | "missing_segment">;
@@ -42,6 +53,11 @@ export interface AIRecommendationRequest {
    * If this array is empty the AI must return null + manualReviewRequired = true.
    */
   candidateValues: string[];
+  /**
+   * Same bounded values with deterministic/reference evidence attached so the
+   * model can compare candidates instead of merely decorating one suggestion.
+   */
+  candidates: AIRecommendationCandidate[];
   existingSuggestion: {
     suggestedValue: string;
     confidence: number;
@@ -54,6 +70,8 @@ export interface AIRecommendationRequest {
     hasOwnershipRules: boolean;
     hasSegmentDictionary: boolean;
     hasCrmReference: boolean;
+    activeReferenceSources: string[];
+    currentDatasetSignals: string[];
     /** Detail string from the matched ownership rule, if any */
     matchedRuleDetail?: string;
     /** Detail string from the matched CRM reference row, if any */
