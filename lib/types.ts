@@ -239,6 +239,10 @@ export interface ApprovedChange {
   timestamp: string;
   riskLevel: "High" | "Medium-High" | "Medium" | "Low";
   userDecision: "Accepted" | "Rejected" | "Flagged";
+  /** Label shown in audit trail and cleaned preview ("Based on ownership rules", etc.) */
+  basisLabel?: string;
+  /** Drives color coding in cleaned dataset preview */
+  basisStrength?: SuggestionBasisStrength;
 }
 
 // ─── App State ─────────────────────────────────────────────────────────────

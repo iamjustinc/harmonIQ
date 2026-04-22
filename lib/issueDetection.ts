@@ -69,21 +69,25 @@ function suggestOwner(record: CRMRecord): ResolutionSuggestion {
   const segment = record.segment.trim().toLowerCase();
 
   if (["CA", "WA", "OR"].includes(state)) {
+    const owner = segment === "enterprise" ? "Noah Kim" : "Olivia Park";
+    const territory = segment === "enterprise" ? "West Enterprise" : "West Commercial";
     return {
       field: "owner",
-      suggestedValue: segment === "enterprise" ? "Noah Kim" : "Olivia Park",
+      suggestedValue: owner,
       confidence: segment === "enterprise" ? 84 : 78,
-      rationale: "Matches the dominant West-region owner pattern for records with similar state and segment values.",
+      rationale: `State field (${state}) maps to West territory. ${segment === "enterprise" ? "Enterprise segment" : "Segment"} aligns with the ${territory} ownership pattern in this dataset. No ownership rules file is loaded — treat as an inferred candidate, not a confirmed assignment.`,
       reviewState: "needs_approval",
     };
   }
 
   if (["TX", "FL", "GA"].includes(state)) {
+    const owner = segment === "smb" ? "Liam Carter" : "Sofia Martinez";
+    const territory = segment === "smb" ? "South Commercial" : "South Enterprise/Growth";
     return {
       field: "owner",
-      suggestedValue: segment === "smb" ? "Liam Carter" : "Sofia Martinez",
+      suggestedValue: owner,
       confidence: segment === "smb" ? 81 : 76,
-      rationale: "Candidate owner is inferred from Southern territory coverage seen across comparable records.",
+      rationale: `State field (${state}) maps to South territory. Segment pattern aligns with the ${territory} ownership seen across comparable records. No ownership rules file is loaded — confirm before applying.`,
       reviewState: "needs_approval",
     };
   }
@@ -93,7 +97,7 @@ function suggestOwner(record: CRMRecord): ResolutionSuggestion {
       field: "owner",
       suggestedValue: "Lucas Rivera",
       confidence: 79,
-      rationale: "Candidate owner aligns with Northeast account coverage and nearby duplicate records.",
+      rationale: `State field (${state}) maps to Northeast territory. Northeast accounts in this dataset follow a pattern consistent with Lucas Rivera. No ownership rules file is loaded — verify before applying.`,
       reviewState: "needs_approval",
     };
   }
@@ -102,7 +106,7 @@ function suggestOwner(record: CRMRecord): ResolutionSuggestion {
     field: "owner",
     suggestedValue: "Unassigned - Review",
     confidence: 58,
-    rationale: "Available fields do not support a confident territory assignment, so the safest resolution is a visible review queue value.",
+    rationale: `State (${record.state?.trim() || "blank"}) does not match a recognizable territory pattern and no ownership rules file is loaded. The safest value flags the record for manual assignment without routing it prematurely.`,
     reviewState: "review_required",
   };
 }
@@ -235,26 +239,36 @@ export function detectInconsistentStates(records: CRMRecord[]): InconsistentStat
 // ─── 5. Missing Segment ─────────────────────────────────────────────────────
 const INVALID_SEGMENTS = new Set(["", "unknown", "-", "n/a", "none", "tbd"]);
 
+const ENTERPRISE_KEYWORDS = ["health", "bio", "medical", "labs", "systems", "security", "capital"] as const;
+const SMB_KEYWORDS = ["retail", "foods", "travel", "living", "supply", "care"] as const;
+
 function suggestSegment(record: CRMRecord): ResolutionSuggestion {
   const name = record.account_name.toLowerCase();
   const domain = record.domain.toLowerCase();
 
-  if (/(health|bio|medical|labs|systems|security|capital)/.test(name) || /\.(ai|net)$/.test(domain)) {
+  const matchedEnterpriseKeyword = ENTERPRISE_KEYWORDS.find((kw) => name.includes(kw));
+  const enterpriseDomainTld = /\.(ai|net)$/.exec(domain)?.[0];
+
+  if (matchedEnterpriseKeyword ?? enterpriseDomainTld) {
+    const signal = matchedEnterpriseKeyword
+      ? `Account name contains "${matchedEnterpriseKeyword}"`
+      : `Domain ends in ${enterpriseDomainTld}`;
     return {
       field: "segment",
       suggestedValue: "Enterprise",
       confidence: 82,
-      rationale: "Account naming, domain profile, and comparable records point to an Enterprise-style operating segment.",
+      rationale: `${signal}, which correlates with Enterprise accounts in this dataset. No segment dictionary is loaded — confirm the tier before applying.`,
       reviewState: "needs_approval",
     };
   }
 
-  if (/(retail|foods|travel|living|supply|care)/.test(name)) {
+  const matchedSmbKeyword = SMB_KEYWORDS.find((kw) => name.includes(kw));
+  if (matchedSmbKeyword) {
     return {
       field: "segment",
       suggestedValue: "SMB",
       confidence: 76,
-      rationale: "Industry wording and nearby records suggest an SMB segment, but business confirmation is still required.",
+      rationale: `Account name contains "${matchedSmbKeyword}", which correlates with SMB accounts in this dataset. No segment dictionary is loaded — business confirmation is still required.`,
       reviewState: "needs_approval",
     };
   }
@@ -263,7 +277,7 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
     field: "segment",
     suggestedValue: "Mid-Market",
     confidence: 66,
-    rationale: "No strong account-size signal is present; Mid-Market is the closest candidate based on surrounding records.",
+    rationale: "No keyword or domain signal matched the Enterprise or SMB patterns in this dataset. Mid-Market is the fallback candidate based on record similarity. Confidence is low — manual review required before applying.",
     reviewState: "review_required",
   };
 }
@@ -536,6 +550,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "High",
         userDecision: "Accepted",
+        basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
+        basisStrength: suggestion.basis?.strength ?? "fallback",
       });
     }
   }
@@ -555,6 +571,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
           timestamp: ts,
           riskLevel: "High",
           userDecision: "Flagged",
+          basisLabel: "Based on domain clustering analysis",
+          basisStrength: "direct",
         });
       }
     }
@@ -573,6 +591,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "Medium-High",
         userDecision: item.suggestedValue ? "Accepted" : "Flagged",
+        basisLabel: item.suggestedValue ? "Based on email syntax repair" : "Flagged for manual correction",
+        basisStrength: "deterministic",
       });
     }
   }
@@ -591,6 +611,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "Medium-High",
         userDecision: "Accepted",
+        basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
+        basisStrength: suggestion.basis?.strength ?? "fallback",
       });
     }
   }
@@ -609,6 +631,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "Medium",
         userDecision: "Accepted",
+        basisLabel: suggestion.basis?.label ?? "Based on deterministic normalization",
+        basisStrength: suggestion.basis?.strength ?? "deterministic",
       });
     }
   }
@@ -626,6 +650,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "Low",
         userDecision: "Accepted",
+        basisLabel: "Based on deterministic normalization",
+        basisStrength: "deterministic",
       });
     }
   }
@@ -643,6 +669,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         timestamp: ts,
         riskLevel: "Medium",
         userDecision: "Accepted",
+        basisLabel: "Based on deterministic normalization",
+        basisStrength: "deterministic",
       });
     }
   }

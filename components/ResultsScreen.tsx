@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import type { ApprovedChange, CRMRecord, IssueStatus, IssueType, WorkflowMode } from "@/lib/types";
+import type { ApprovedChange, CRMRecord, IssueStatus, IssueType, SuggestionBasisStrength, WorkflowMode } from "@/lib/types";
 import { SAMPLE_DATA } from "@/lib/data";
 import { INITIAL_SCORE } from "@/lib/issueDetection";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
@@ -83,6 +83,32 @@ function buildChangedFields(changes: ApprovedChange[]) {
   return changedFields;
 }
 
+/** Per-cell basis strength — drives color coding in the cleaned dataset preview */
+function buildChangeBasis(changes: ApprovedChange[]) {
+  const result = new Map<string, Map<string, SuggestionBasisStrength>>();
+  for (const change of changes) {
+    if (change.recordId === "DATASET") continue;
+    const fields = result.get(change.recordId) ?? new Map<string, SuggestionBasisStrength>();
+    fields.set(change.field, change.basisStrength ?? "fallback");
+    result.set(change.recordId, fields);
+  }
+  return result;
+}
+
+function previewCellClass(
+  changed: boolean,
+  basisStrength: SuggestionBasisStrength | undefined,
+  isId: boolean,
+): string {
+  if (!changed) return isId ? "font-mono text-slate-500" : "text-slate-700";
+  // Deterministic or direct/strong reference = high confidence → emerald
+  if (basisStrength === "deterministic" || basisStrength === "direct" || basisStrength === "strong") {
+    return "bg-emerald-50 font-bold text-emerald-800";
+  }
+  // Heuristic or fallback = review candidate → amber
+  return "bg-amber-50 font-bold text-amber-800";
+}
+
 function getCsvHeaders(records: CRMRecord[]) {
   const optionalHeaders: (keyof CRMRecord)[] = [];
   if (records.some((record) => record.harmoniq_review_status)) optionalHeaders.push("harmoniq_review_status");
@@ -161,6 +187,7 @@ export default function ResultsScreen({
   const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
   const cleanedData = useMemo(() => applyChanges(SAMPLE_DATA, approvedChanges), [approvedChanges]);
   const changedFields = useMemo(() => buildChangedFields(approvedChanges), [approvedChanges]);
+  const changeBasis = useMemo(() => buildChangeBasis(approvedChanges), [approvedChanges]);
   const totalBefore = definitions.reduce((sum, definition) => sum + definition.recordCount, 0);
   const totalRemaining = definitions.reduce((sum, definition) => (
     sum + (issueStatuses[definition.type] === "approved" ? 0 : definition.recordCount)
@@ -425,16 +452,11 @@ export default function ResultsScreen({
                       <tr key={row.record_id} className="hover:bg-slate-50">
                         {previewColumns.map((column) => {
                           const changed = changedFields.get(row.record_id)?.has(column.key);
+                          const basis = changeBasis.get(row.record_id)?.get(column.key);
                           return (
                             <td
                               key={column.key}
-                              className={`max-w-[220px] truncate px-3 py-2.5 text-xs ${
-                                changed
-                                  ? "bg-emerald-50 font-bold text-emerald-800"
-                                  : column.key === "record_id"
-                                    ? "font-mono text-slate-500"
-                                    : "text-slate-700"
-                              }`}
+                              className={`max-w-[220px] truncate px-3 py-2.5 text-xs ${previewCellClass(!!changed, basis, column.key === "record_id")}`}
                             >
                               {String(row[column.key] ?? "") || "-"}
                             </td>
@@ -445,8 +467,20 @@ export default function ResultsScreen({
                   </tbody>
                 </table>
               </div>
-              <div className="border-t border-slate-100 bg-slate-50 px-4 py-2 text-[11px] font-medium text-slate-500">
-                Showing {previewRows.length} of {cleanedData.length} rows. Export includes the full current dataset with approved changes only.
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-2">
+                <p className="text-[11px] font-medium text-slate-500">
+                  Showing {previewRows.length} of {cleanedData.length} rows. Export includes the full current dataset with approved changes only.
+                </p>
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" />
+                    Deterministic or reference-backed
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-200" />
+                    Inferred — review before relying
+                  </span>
+                </div>
               </div>
             </div>
           </section>
@@ -470,7 +504,7 @@ export default function ResultsScreen({
                   <table className="w-full min-w-[920px] text-sm">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-200">
-                        {["Change", "Record", "Field", "Before / After", "Issue", "Decision"].map((heading) => (
+                        {["Change", "Record", "Field", "Before / After", "Issue", "Basis", "Decision"].map((heading) => (
                           <th key={heading} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                             {heading}
                           </th>
@@ -489,6 +523,7 @@ export default function ResultsScreen({
                               <DiffCell before={change.before} after={change.after} />
                             </td>
                             <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">{definition.title}</td>
+                            <td className="px-3 py-2.5 text-[11px] text-slate-500">{change.basisLabel ?? "—"}</td>
                             <td className="px-3 py-2.5 text-xs font-bold text-slate-700">{change.userDecision}</td>
                           </tr>
                         );
