@@ -526,6 +526,41 @@ function resolutionTypeForSuggestion(suggestion: ResolutionSuggestion): Resoluti
   return "unresolved_review_required";
 }
 
+function unresolvedValueForIssue(issueType: IssueType): string {
+  if (issueType === "missing_owner") return "Needs manual assignment";
+  if (issueType === "missing_segment") return "Needs segment review";
+  return "[Flagged - review required]";
+}
+
+function changeValueForSuggestion(issueType: IssueType, suggestion: ResolutionSuggestion): string {
+  return resolutionTypeForSuggestion(suggestion) === "unresolved_review_required"
+    ? unresolvedValueForIssue(issueType)
+    : suggestion.suggestedValue;
+}
+
+function decisionForSuggestion(suggestion: ResolutionSuggestion): ApprovedChange["userDecision"] {
+  return resolutionTypeForSuggestion(suggestion) === "unresolved_review_required" ? "Flagged" : "Accepted";
+}
+
+function evidenceDetailForSuggestion(issueType: IssueType, suggestion: ResolutionSuggestion): string {
+  const basisLabel = suggestion.basis?.label ?? "No strong basis";
+  const basisDetail = suggestion.basis?.detail ?? suggestion.rationale;
+  const source = suggestion.basis?.sourceName ? ` Source: ${suggestion.basis.sourceName}.` : "";
+  const strength = suggestion.basis?.strength ?? "fallback";
+
+  if (resolutionTypeForSuggestion(suggestion) === "unresolved_review_required") {
+    if (issueType === "missing_owner") {
+      return `No strong owner basis found. harmonIQ did not assign a named owner because contact names and email addresses are not owner evidence. ${basisDetail}${source}`;
+    }
+    if (issueType === "missing_segment") {
+      return `No strong segment basis found. Weak inferred values are kept as review-required until supported by a segment dictionary, CRM reference, or manual override. ${basisDetail}${source}`;
+    }
+    return `Manual review required. ${basisDetail}${source}`;
+  }
+
+  return `Selected "${suggestion.suggestedValue}" because ${basisLabel}: ${basisDetail}${source} Evidence strength: ${strength}.`;
+}
+
 export function generateChanges(issueType: IssueType, referenceContext: ReferenceContext = EMPTY_REFERENCE_CONTEXT): ApprovedChange[] {
   const ts = new Date().toISOString();
   const changes: ApprovedChange[] = [];
@@ -539,15 +574,15 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         accountName: item.record.account_name.trim(),
         field: "owner",
         before: item.ownerValue || "(blank)",
-        after: suggestion.suggestedValue,
+        after: changeValueForSuggestion(issueType, suggestion),
         issueType,
         timestamp: ts,
         riskLevel: "High",
-        userDecision: "Accepted",
+        userDecision: decisionForSuggestion(suggestion),
         basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
         basisStrength: suggestion.basis?.strength ?? "fallback",
         resolutionType: resolutionTypeForSuggestion(suggestion),
-        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
+        evidenceDetail: evidenceDetailForSuggestion(issueType, suggestion),
       });
     }
   }
@@ -608,15 +643,15 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         accountName: item.record.account_name.trim(),
         field: "segment",
         before: item.segmentValue || "(blank)",
-        after: suggestion.suggestedValue,
+        after: changeValueForSuggestion(issueType, suggestion),
         issueType,
         timestamp: ts,
         riskLevel: "Medium-High",
-        userDecision: "Accepted",
+        userDecision: decisionForSuggestion(suggestion),
         basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
         basisStrength: suggestion.basis?.strength ?? "fallback",
         resolutionType: resolutionTypeForSuggestion(suggestion),
-        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
+        evidenceDetail: evidenceDetailForSuggestion(issueType, suggestion),
       });
     }
   }
@@ -638,7 +673,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         basisLabel: suggestion.basis?.label ?? "Based on deterministic normalization",
         basisStrength: suggestion.basis?.strength ?? "deterministic",
         resolutionType: resolutionTypeForSuggestion(suggestion),
-        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
+        evidenceDetail: evidenceDetailForSuggestion(issueType, suggestion),
       });
     }
   }

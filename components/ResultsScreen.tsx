@@ -218,6 +218,7 @@ function changesToCsv(changes: ApprovedChange[]) {
     "resolution_type",
     "basis",
     "evidence_detail",
+    "candidate_comparison",
     "ai_candidate_count",
     "user_decision",
     "timestamp",
@@ -237,6 +238,7 @@ function changesToCsv(changes: ApprovedChange[]) {
       getResolutionType(change),
       change.basisLabel ?? "",
       change.evidenceDetail ?? "",
+      change.candidateComparison ?? "",
       change.aiCandidateCount ?? "",
       change.userDecision,
       change.timestamp,
@@ -677,6 +679,11 @@ export default function ResultsScreen({
                               <p className="text-[11px] font-bold text-slate-700">{change.basisLabel ?? RESOLUTION_META[resolutionType].label}</p>
                               {change.evidenceDetail ? (
                                 <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{change.evidenceDetail}</p>
+                              ) : null}
+                              {change.candidateComparison ? (
+                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">
+                                  {change.candidateComparison}
+                                </p>
                               ) : null}
                               {change.aiCandidateCount ? (
                                 <p className="mt-1 text-[11px] font-bold text-violet-700">

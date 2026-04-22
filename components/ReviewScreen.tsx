@@ -639,6 +639,61 @@ function aiAuditedField(issueType: IssueType): string | undefined {
   return undefined;
 }
 
+function candidateDecisionLabel(
+  candidate: AIRecommendationCandidate,
+  recommendation: AIRecommendationResult
+): "Selected" | "Rejected" | "Review" {
+  if (recommendation.recommendedValue === candidate.value) return "Selected";
+  if (recommendation.manualReviewRequired && !recommendation.recommendedValue) return "Review";
+  return "Rejected";
+}
+
+function candidateReason(
+  candidate: AIRecommendationCandidate,
+  recommendation: AIRecommendationResult
+): string {
+  if (recommendation.recommendedValue === candidate.value) {
+    return candidate.matchSummary || "Best supported candidate in the bounded set.";
+  }
+
+  if (candidate.basisType === "direct_rule") {
+    return "A stronger or more specific rule/reference candidate was selected.";
+  }
+
+  if (candidate.basisType === "reference_pattern") {
+    return "Not selected because a stronger direct rule or better matching reference candidate was available.";
+  }
+
+  if (candidate.basisType === "dataset_pattern") {
+    return "Not selected because current-dataset evidence is weaker than rule or trusted reference evidence.";
+  }
+
+  if (candidate.basisType === "weak_heuristic") {
+    return "Rejected because it lacked a complete territory, segment, state, domain, or reference match.";
+  }
+
+  return "Rejected because no supporting business evidence matched this record.";
+}
+
+function candidateComparisonSummary(
+  recommendation: AIRecommendationResult | null,
+  candidates: AIRecommendationCandidate[]
+): string | undefined {
+  if (!recommendation || candidates.length === 0) return undefined;
+  const selected = recommendation.recommendedValue ?? "none";
+  const rejected = candidates
+    .filter((candidate) => candidate.value !== recommendation.recommendedValue)
+    .slice(0, 4)
+    .map((candidate) => `${candidate.value}: ${candidateReason(candidate, recommendation)}`);
+  return `Selected: ${selected}. Rejected: ${rejected.length > 0 ? rejected.join(" | ") : "none"}.`;
+}
+
+function unresolvedValueForIssue(issueType: IssueType): string {
+  if (issueType === "missing_owner") return "Needs manual assignment";
+  if (issueType === "missing_segment") return "Needs segment review";
+  return "[Flagged - review required]";
+}
+
 function annotateChangesWithAIReview(
   changes: ApprovedChange[],
   issueType: IssueType,
@@ -650,26 +705,33 @@ function annotateChangesWithAIReview(
   const recordId = aiAuditedRecordId(issueType);
   const field = aiAuditedField(issueType);
   if (!recordId || !field) return changes;
+  const candidateComparison = candidateComparisonSummary(recommendation, candidates);
 
   return changes.map((change) => {
     if (change.recordId !== recordId || change.field !== field) return change;
 
-    if (recommendation.recommendedValue && change.after === recommendation.recommendedValue) {
+    if (recommendation.recommendedValue) {
       return {
         ...change,
+        after: recommendation.recommendedValue,
+        userDecision: "Accepted",
         resolutionType: "ai_reviewed",
         basisLabel: "AI-reviewed recommendation",
         evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and selected "${recommendation.recommendedValue}" from ${recommendation.basisType.replace(/_/g, " ")} evidence. ${recommendation.evidenceSummary}`,
         aiCandidateCount: candidates.length,
+        candidateComparison,
       };
     }
 
     if (recommendation.manualReviewRequired) {
       return {
         ...change,
+        after: unresolvedValueForIssue(issueType),
+        userDecision: "Flagged",
         resolutionType: "unresolved_review_required",
         evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and declined to select a trusted value. ${recommendation.cautionNote ?? recommendation.evidenceSummary}`,
         aiCandidateCount: candidates.length,
+        candidateComparison,
       };
     }
 
@@ -699,7 +761,7 @@ function AIRecommendationPanel({
 }) {
   const bandColor = CONFIDENCE_BAND_COLORS[recommendation.confidenceBand] ?? CONFIDENCE_BAND_COLORS.insufficient;
   const selectedCandidate = candidates.find((candidate) => candidate.value === recommendation.recommendedValue);
-  const shownCandidates = candidates.slice(0, 4);
+  const shownCandidates = candidates.slice(0, 5);
 
   return (
     <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
@@ -748,22 +810,56 @@ function AIRecommendationPanel({
       <div className="mt-2 rounded-md border border-violet-100 bg-white/60 p-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">Bounded candidates reviewed</p>
-          <span className="text-[10px] font-bold text-violet-600">{candidates.length}</span>
+          <span className="text-[10px] font-bold text-violet-600">AI compared {candidates.length}</span>
         </div>
         <div className="mt-1.5 space-y-1">
-          {shownCandidates.map((candidate) => (
-            <div key={`${candidate.value}-${candidate.source}`} className="flex items-start justify-between gap-2 rounded border border-slate-100 bg-white px-2 py-1">
-              <div className="min-w-0">
-                <p className={`truncate text-[11px] font-bold ${candidate.value === recommendation.recommendedValue ? "text-violet-800" : "text-slate-700"}`}>
-                  {candidate.value}
+          {shownCandidates.map((candidate) => {
+            const decision = candidateDecisionLabel(candidate, recommendation);
+            const isSelected = decision === "Selected";
+            const isReview = decision === "Review";
+            return (
+              <div
+                key={`${candidate.value}-${candidate.source}`}
+                className={`rounded border px-2 py-1.5 ${
+                  isSelected
+                    ? "border-violet-200 bg-violet-50"
+                    : isReview
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-slate-100 bg-white"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className={`truncate text-[11px] font-bold ${isSelected ? "text-violet-800" : "text-slate-700"}`}>
+                      {candidate.value}
+                    </p>
+                    <p className="truncate text-[10px] text-slate-500">{candidate.basisLabel} · {candidate.source}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                      isSelected
+                        ? "border-violet-200 bg-white text-violet-700"
+                        : isReview
+                        ? "border-amber-200 bg-white text-amber-700"
+                        : "border-slate-200 bg-slate-50 text-slate-500"
+                    }`}
+                    >
+                      {decision}
+                    </span>
+                    <span className="rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
+                      {candidate.confidenceBand}
+                    </span>
+                  </div>
+                </div>
+                <p className="mt-1 text-[10px] leading-relaxed text-slate-600">
+                  {candidateReason(candidate, recommendation)}
                 </p>
-                <p className="truncate text-[10px] text-slate-500">{candidate.basisLabel} · {candidate.source}</p>
+                {candidate.basisDetail ? (
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-slate-500">Signal: {candidate.basisDetail}</p>
+                ) : null}
               </div>
-              <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">
-                {candidate.confidenceBand}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <p className="mt-1.5 text-[10px] leading-relaxed text-violet-700">
           Deterministic preview: {deterministicValue || "No deterministic value"}. AI output is not applied until the issue type is approved.

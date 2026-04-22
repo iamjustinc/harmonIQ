@@ -256,6 +256,8 @@ export interface ApprovedChange {
   evidenceDetail?: string;
   /** Present when AI reviewed a bounded candidate set for this change */
   aiCandidateCount?: number;
+  /** Short selected/rejected candidate comparison for audit surfaces */
+  candidateComparison?: string;
 }
 
 // ─── App State ─────────────────────────────────────────────────────────────

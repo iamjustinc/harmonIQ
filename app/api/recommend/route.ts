@@ -20,6 +20,7 @@ import type { NextRequest } from "next/server";
 import type {
   AIBasisType,
   AIConfidenceBand,
+  AIRecommendationCandidate,
   AIRecommendationRequest,
   AIRecommendationResult,
 } from "@/lib/aiRecommendation";
@@ -78,10 +79,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 function validateAndNormalize(
   raw: Record<string, unknown>,
-  candidates: string[]
+  candidates: string[],
+  candidateEvidence: AIRecommendationCandidate[],
+  issueType: AIRecommendationRequest["issueType"]
 ): AIRecommendationResult {
   let recommendedValue: string | null = null;
   let rejectedOutOfBounds = false;
+  let rejectedWeakOwnerEvidence = false;
   if (raw.recommendedValue !== null && raw.recommendedValue !== undefined) {
     const candidate = String(raw.recommendedValue).trim();
     if (candidates.includes(candidate)) {
@@ -91,13 +95,25 @@ function validateAndNormalize(
     }
   }
 
-  const basisType: AIBasisType = rejectedOutOfBounds ? "no_basis" : isBasisType(raw.basisType)
-    ? raw.basisType
-    : "no_basis";
+  const selectedEvidence = recommendedValue
+    ? candidateEvidence.find((candidate) => candidate.value === recommendedValue)
+    : undefined;
+  if (
+    issueType === "missing_owner" &&
+    selectedEvidence &&
+    (selectedEvidence.basisType === "weak_heuristic" || selectedEvidence.basisType === "no_basis")
+  ) {
+    recommendedValue = null;
+    rejectedWeakOwnerEvidence = true;
+  }
 
-  const confidenceBand: AIConfidenceBand = rejectedOutOfBounds ? "insufficient" : isConfidenceBand(raw.confidenceBand)
-    ? raw.confidenceBand
-    : "insufficient";
+  const basisType: AIBasisType = rejectedOutOfBounds || rejectedWeakOwnerEvidence
+    ? "no_basis"
+    : selectedEvidence?.basisType ?? (isBasisType(raw.basisType) ? raw.basisType : "no_basis");
+
+  const confidenceBand: AIConfidenceBand = rejectedOutOfBounds || rejectedWeakOwnerEvidence
+    ? "insufficient"
+    : selectedEvidence?.confidenceBand ?? (isConfidenceBand(raw.confidenceBand) ? raw.confidenceBand : "insufficient");
 
   const manualReviewRequired =
     recommendedValue === null ? true : Boolean(raw.manualReviewRequired);
@@ -105,6 +121,8 @@ function validateAndNormalize(
   const cautionNote =
     rejectedOutOfBounds
       ? "Model returned a value outside the bounded candidate set, so harmonIQ rejected it and kept the record in manual review."
+      : rejectedWeakOwnerEvidence
+      ? "Model selected an owner candidate without explicit owner evidence. harmonIQ rejected the assignment and kept the record in manual review."
       : raw.cautionNote !== null && raw.cautionNote !== undefined
       ? String(raw.cautionNote)
       : null;
@@ -115,6 +133,8 @@ function validateAndNormalize(
     confidenceBand,
     rationale: rejectedOutOfBounds
       ? "AI output did not satisfy the bounded candidate rule, so no AI value is eligible for approval."
+      : rejectedWeakOwnerEvidence
+      ? "AI selected an owner candidate, but the candidate did not have explicit ownership-rule, territory, reference CRM, or strong same-domain evidence."
       : typeof raw.rationale === "string" ? raw.rationale : "Unable to produce rationale.",
     manualReviewRequired,
     evidenceSummary:
@@ -148,12 +168,15 @@ STRICT RULES:
 3. Geographic state alone, without a routing rule or reference source, is NOT sufficient evidence for a named owner.
 4. Different states in the same region should only share an owner if routing rules explicitly group them.
 5. Higher-tier evidence always takes precedence.
+6. For missing_owner, choose a named owner only from direct_rule, reference_pattern, or dataset_pattern evidence.
+   If the best owner evidence is weak_heuristic or no_basis, return recommendedValue = null and manualReviewRequired = true.
+7. When rejecting a candidate, explain which required signal was missing, such as no matching territory, segment, state, domain, or reference row.
 
 Evidence hierarchy:
 - direct_rule: ownership_rules file matched region + segment, OR segment dictionary validated the tier -> HIGH confidence
 - reference_pattern: clean CRM reference export matched domain or account name -> MEDIUM confidence
 - dataset_pattern: same-domain or same-account evidence from the uploaded CRM dataset -> MEDIUM or LOW confidence
-- weak_heuristic: only keyword pattern or geographic guess -> LOW confidence, manual review recommended
+- weak_heuristic: only keyword pattern, segment-only owner signal, or geographic guess -> LOW confidence, manual review required for owner
 - no_basis: no supporting evidence -> manualReviewRequired = true, recommendedValue = null
 
 Compare the candidate evidence. Prefer direct_rule over reference_pattern, reference_pattern over dataset_pattern, and dataset_pattern over weak_heuristic. Be concise and explicit about which evidence category matched.`;
@@ -314,7 +337,7 @@ Evaluate this evidence. Confirm the deterministic suggestion if evidence is soli
       );
     }
 
-    const result = validateAndNormalize(parsed, candidateValues);
+    const result = validateAndNormalize(parsed, candidateValues, candidates, issueType);
     return Response.json({ result, provider: "openai", model });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

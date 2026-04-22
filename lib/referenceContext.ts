@@ -315,13 +315,16 @@ function matchOwnershipRule(record: CRMRecord, context: ReferenceContext): Owner
   return context.ownershipRules
     .filter((rule) => isValidReferenceValue(rule.owner))
     .map((rule) => {
-      let score = 0;
-      if (rule.region && recordRegion && rule.region.toLowerCase() === recordRegion.toLowerCase()) score += 2;
-      if (rule.territory && recordRegion && rule.territory.toLowerCase().includes(recordRegion.toLowerCase())) score += 1;
-      if (rule.segment && recordSegment && rule.segment.toLowerCase() === recordSegment.toLowerCase()) score += 3;
-      return { rule, score };
+      const regionMatches = !!recordRegion && (
+        rule.region.toLowerCase() === recordRegion.toLowerCase() ||
+        rule.territory.toLowerCase().includes(recordRegion.toLowerCase())
+      );
+      const segmentMatches = !!rule.segment && !!recordSegment && rule.segment.toLowerCase() === recordSegment.toLowerCase();
+      const ruleIsEligible = rule.segment ? regionMatches && segmentMatches : regionMatches;
+      const score = (regionMatches ? 3 : 0) + (segmentMatches ? 2 : 0);
+      return { rule, score, ruleIsEligible };
     })
-    .filter(({ score }) => score >= 3)
+    .filter(({ ruleIsEligible }) => ruleIsEligible)
     .sort((a, b) => b.score - a.score)[0]?.rule;
 }
 
@@ -358,13 +361,15 @@ export function contextualizeSuggestion(
     const rule = matchOwnershipRule(record, context);
     if (rule) {
       const territoryLabel = rule.territory || rule.region || "matched territory";
+      const stateLabel = standardizeState(record.state) || record.state || "unknown state";
+      const segmentLabel = canonicalSegment(record.segment) || "no segment";
       return {
         ...baseSuggestion,
         suggestedValue: rule.owner,
         confidence: rule.segment ? 94 : 88,
-        rationale: `Ownership rule maps ${territoryLabel}${rule.segment ? ` and ${rule.segment}` : ""} accounts to ${rule.owner}. Human review remains required before assignment.`,
+        rationale: `Ownership rule maps ${territoryLabel}${rule.segment ? ` and ${rule.segment}` : ""} accounts to ${rule.owner}. The match uses state ${stateLabel} and segment ${segmentLabel}; human review remains required before assignment.`,
         reviewState: "needs_approval",
-        basis: basis("ownership_rules", "Based on ownership rules", `Matched ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`, "direct", rule.sourceName),
+        basis: basis("ownership_rules", "Based on ownership rules", `Matched state ${stateLabel} -> ${regionForRecord(record)} and segment ${segmentLabel} to ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`, "direct", rule.sourceName),
       };
     }
 
