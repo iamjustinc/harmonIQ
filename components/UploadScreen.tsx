@@ -3,10 +3,16 @@
 import { useCallback, useRef, useState } from "react";
 import { DATASET_META } from "@/lib/data";
 import { ISSUE_DEFINITIONS } from "@/lib/issueDetection";
+import { REFERENCE_SOURCE_DEFINITIONS } from "@/lib/referenceContext";
+import type { ReferenceContext, ReferenceSourceType } from "@/lib/types";
 import { SeverityBadge } from "./harmoniq-ui";
 
 interface UploadScreenProps {
+  referenceContext: ReferenceContext;
   onAnalyze: (fileName: string) => void;
+  onAttachReferenceFile: (type: ReferenceSourceType, fileName: string, csv: string) => void;
+  onAttachSampleReferencePack: () => void;
+  onToggleReferenceSource: (type: ReferenceSourceType, active: boolean) => void;
 }
 
 type UploadState = "idle" | "hovering" | "loaded" | "analyzing";
@@ -26,9 +32,16 @@ const ANALYSIS_STEPS = [
   "Preparing Decision Workspace",
 ];
 
-export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
+export default function UploadScreen({
+  referenceContext,
+  onAnalyze,
+  onAttachReferenceFile,
+  onAttachSampleReferencePack,
+  onToggleReferenceSource,
+}: UploadScreenProps) {
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [fileName, setFileName] = useState("");
+  const [referenceMessage, setReferenceMessage] = useState("Optional context improves recommendation basis without changing the review gate.");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadSample = useCallback(() => {
@@ -56,6 +69,18 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
     setUploadState("analyzing");
     window.setTimeout(() => onAnalyze(selectedName), 1450);
   }, [fileName, onAnalyze]);
+
+  const handleReferenceFile = useCallback(async (type: ReferenceSourceType, file: File | undefined) => {
+    if (!file) return;
+    const csv = await file.text();
+    onAttachReferenceFile(type, file.name, csv);
+    setReferenceMessage(`${file.name} attached as structured reference context.`);
+  }, [onAttachReferenceFile]);
+
+  const attachSamplePack = useCallback(() => {
+    onAttachSampleReferencePack();
+    setReferenceMessage("Demo reference pack attached: ownership rules, segment dictionary, and clean CRM reference.");
+  }, [onAttachSampleReferencePack]);
 
   return (
     <main className="min-h-screen bg-slate-50 px-6 py-8">
@@ -244,6 +269,78 @@ export default function UploadScreen({ onAnalyze }: UploadScreenProps) {
                   <p className="text-2xl font-black tabular-nums text-slate-950">{ISSUE_DEFINITIONS.length}</p>
                   <p className="text-xs font-medium text-slate-500">Issue types</p>
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-white p-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Reference context (optional)</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-500">{referenceMessage}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={attachSamplePack}
+                  className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                >
+                  Attach demo pack
+                </button>
+              </div>
+
+              <div className="space-y-2.5">
+                {REFERENCE_SOURCE_DEFINITIONS.map((definition) => {
+                  const source = referenceContext.sources.find((item) => item.type === definition.type);
+                  return (
+                    <div key={definition.type} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-black text-slate-900">{definition.label}</p>
+                          <p className="mt-0.5 text-[11px] text-slate-500">{definition.expectedShape}</p>
+                        </div>
+                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                          source?.active
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-500"
+                        }`}
+                        >
+                          {source?.active ? "Active" : "Inactive"}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-xs leading-relaxed text-slate-600">{definition.effectDescription}</p>
+
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-bold text-slate-700">{source?.fileName ?? "No file attached"}</p>
+                          <p className="text-[11px] text-slate-400">{source ? `${source.rowCount} parsed rows` : "CSV only for V1"}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {source ? (
+                            <button
+                              type="button"
+                              onClick={() => onToggleReferenceSource(definition.type, !source.active)}
+                              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                            >
+                              {source.active ? "Disable" : "Enable"}
+                            </button>
+                          ) : null}
+                          <label className="cursor-pointer rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+                            Attach CSV
+                            <input
+                              type="file"
+                              accept=".csv"
+                              className="sr-only"
+                              onChange={(event) => {
+                                void handleReferenceFile(definition.type, event.target.files?.[0]);
+                                event.currentTarget.value = "";
+                              }}
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

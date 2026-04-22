@@ -11,8 +11,10 @@ import type {
   NamingFormatRecord,
   SchemaMismatchRecord,
   ApprovedChange,
+  ReferenceContext,
 } from "./types";
 import { SAMPLE_DATA } from "./data";
+import { EMPTY_REFERENCE_CONTEXT, contextualizeSuggestion } from "./referenceContext";
 
 // ─── State normalisation table ──────────────────────────────────────────────
 const STATE_MAP: Record<string, string> = {
@@ -516,19 +518,20 @@ export function calculateScore(
 // ─── Generate ApprovedChanges for an issue type ─────────────────────────────
 let changeCounter = 1;
 
-export function generateChanges(issueType: IssueType): ApprovedChange[] {
+export function generateChanges(issueType: IssueType, referenceContext: ReferenceContext = EMPTY_REFERENCE_CONTEXT): ApprovedChange[] {
   const ts = new Date().toISOString();
   const changes: ApprovedChange[] = [];
 
   if (issueType === "missing_owner") {
     for (const item of DETECTED.missingOwner) {
+      const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: item.record.record_id,
         accountName: item.record.account_name.trim(),
         field: "owner",
         before: item.ownerValue || "(blank)",
-        after: item.suggestion.suggestedValue,
+        after: suggestion.suggestedValue,
         issueType,
         timestamp: ts,
         riskLevel: "High",
@@ -576,13 +579,14 @@ export function generateChanges(issueType: IssueType): ApprovedChange[] {
 
   if (issueType === "missing_segment") {
     for (const item of DETECTED.missingSegments) {
+      const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: item.record.record_id,
         accountName: item.record.account_name.trim(),
         field: "segment",
         before: item.segmentValue || "(blank)",
-        after: item.suggestion.suggestedValue,
+        after: suggestion.suggestedValue,
         issueType,
         timestamp: ts,
         riskLevel: "Medium-High",
@@ -593,13 +597,14 @@ export function generateChanges(issueType: IssueType): ApprovedChange[] {
 
   if (issueType === "inconsistent_state") {
     for (const item of DETECTED.inconsistentStates) {
+      const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: item.record.record_id,
         accountName: item.record.account_name.trim(),
         field: "state",
         before: item.currentValue,
-        after: item.standardValue,
+        after: suggestion.suggestedValue,
         issueType,
         timestamp: ts,
         riskLevel: "Medium",

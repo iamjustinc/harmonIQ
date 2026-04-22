@@ -78,12 +78,78 @@ export interface WorkflowIssueOverride {
 
 export type SuggestionReviewState = "needs_approval" | "review_required" | "deterministic";
 
+export type ReferenceSourceType = "ownership_rules" | "segment_dictionary" | "crm_reference";
+
+export type SuggestionBasisStrength = "direct" | "strong" | "fallback" | "deterministic";
+
+export interface SuggestionBasis {
+  type: ReferenceSourceType | "record_heuristic" | "deterministic";
+  label: string;
+  detail: string;
+  sourceName?: string;
+  strength: SuggestionBasisStrength;
+}
+
 export interface ResolutionSuggestion {
   field: "owner" | "segment" | "state" | "country" | "lifecycle_stage" | "email" | "schema_mapping";
   suggestedValue: string;
   confidence: number;
   rationale: string;
   reviewState: SuggestionReviewState;
+  basis?: SuggestionBasis;
+}
+
+// ─── Optional Reference Context ─────────────────────────────────────────────
+
+export interface ReferenceSourceDefinition {
+  type: ReferenceSourceType;
+  label: string;
+  expectedShape: string;
+  effectDescription: string;
+}
+
+export interface ReferenceContextSource {
+  type: ReferenceSourceType;
+  fileName: string;
+  rowCount: number;
+  active: boolean;
+  uploadedAt: string;
+  effectDescription: string;
+}
+
+export interface OwnershipRule {
+  region: string;
+  territory: string;
+  segment: string;
+  owner: string;
+  queue?: string;
+  sourceName: string;
+}
+
+export interface SegmentDictionaryEntry {
+  segment: string;
+  allowedValues: string[];
+  definition?: string;
+  lifecycleStage?: string;
+  sourceName: string;
+}
+
+export interface CRMReferenceRow {
+  account?: string;
+  domain?: string;
+  state?: string;
+  country?: string;
+  segment?: string;
+  owner?: string;
+  territory?: string;
+  sourceName: string;
+}
+
+export interface ReferenceContext {
+  sources: ReferenceContextSource[];
+  ownershipRules: OwnershipRule[];
+  segmentDictionary: SegmentDictionaryEntry[];
+  crmReferenceRows: CRMReferenceRow[];
 }
 
 // ─── Issue Detection Results ────────────────────────────────────────────────
@@ -186,4 +252,5 @@ export interface AppState {
   readinessScore: number;
   activeIssueType: IssueType;
   workflowMode: WorkflowMode;
+  referenceContext: ReferenceContext;
 }

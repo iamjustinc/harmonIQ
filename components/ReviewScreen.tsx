@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import type { IssueStatus, IssueType, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
+import type { IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
 import { DETECTED, generateChanges } from "@/lib/issueDetection";
+import { contextualizeSuggestion, EMPTY_REFERENCE_CONTEXT, suggestionBasisLabel } from "@/lib/referenceContext";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
 import Sidebar from "./Sidebar";
 import {
@@ -26,12 +27,15 @@ interface ReviewScreenProps {
   issueStatuses: Record<IssueType, IssueStatus>;
   readinessScore: number;
   workflowMode: WorkflowMode;
+  referenceContext: ReferenceContext;
   activeIssueType: IssueType;
+  lastSavedAt: string;
   onWorkflowModeChange: (mode: WorkflowMode) => void;
   onApprove: (issueType: IssueType, changes: ApprovedChange[]) => void;
   onSkip: (issueType: IssueType) => void;
   onUndo: (issueType: IssueType) => void;
   onSelectIssue: (issueType: IssueType) => void;
+  onSaveProgress: () => void;
   onFinish: () => void;
   onNavigate: (screen: "upload" | "profile" | "review" | "results") => void;
 }
@@ -45,6 +49,8 @@ type FlagRow = {
   confidence: number;
   rationale: string;
   reviewState: string;
+  basis: string;
+  basisDetail: string;
 };
 
 type DiffRow = {
@@ -68,6 +74,8 @@ type ManualFixRow = {
   suggestedValue: string;
   confidence: number;
   rationale: string;
+  basis: string;
+  basisDetail: string;
   context: string;
 };
 
@@ -81,6 +89,11 @@ function suggestionStateLabel(suggestion: ResolutionSuggestion): string {
   return "Review required";
 }
 
+function formatSavedAt(iso: string): string {
+  if (!iso) return "Not saved yet";
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 function fallbackSuggestion(field: ResolutionSuggestion["field"], suggestedValue: string, rationale: string): ResolutionSuggestion {
   return {
     field,
@@ -88,21 +101,32 @@ function fallbackSuggestion(field: ResolutionSuggestion["field"], suggestedValue
     confidence: 62,
     rationale,
     reviewState: "review_required",
+    basis: {
+      type: "record_heuristic",
+      label: "Based on record-only heuristic",
+      detail: "No active reference source produced a stronger candidate.",
+      strength: "fallback",
+    },
   };
 }
 
-function getFlagRows(type: IssueType): FlagRow[] {
+function getFlagRows(type: IssueType, referenceContext: ReferenceContext): FlagRow[] {
   if (type === "missing_owner") {
-    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => ({
-      id: record.record_id,
-      scope: `${record.record_id} - ${record.account_name.trim()}`,
-      current: ownerValue || "(blank)",
-      issue: "Owner cannot be used for routing.",
-      suggestedValue: suggestion.suggestedValue,
-      confidence: suggestion.confidence,
-      rationale: suggestion.rationale,
-      reviewState: suggestionStateLabel(suggestion),
-    }));
+    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => {
+      const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      return {
+        id: record.record_id,
+        scope: `${record.record_id} - ${record.account_name.trim()}`,
+        current: ownerValue || "(blank)",
+        issue: "Owner cannot be used for routing.",
+        suggestedValue: contextualSuggestion.suggestedValue,
+        confidence: contextualSuggestion.confidence,
+        rationale: contextualSuggestion.rationale,
+        reviewState: suggestionStateLabel(contextualSuggestion),
+        basis: suggestionBasisLabel(contextualSuggestion),
+        basisDetail: contextualSuggestion.basis?.detail ?? "",
+      };
+    });
   }
 
   if (type === "invalid_email") {
@@ -117,20 +141,27 @@ function getFlagRows(type: IssueType): FlagRow[] {
         ? "Obvious syntax repair matches the account domain and keeps the correction reviewable."
         : "No safe correction is available from the current fields.",
       reviewState: suggestedValue ? "Needs approval" : "Review required",
+      basis: "Based on record-only heuristic",
+      basisDetail: "Uses deterministic email syntax checks and account domain only.",
     }));
   }
 
   if (type === "missing_segment") {
-    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => ({
-      id: record.record_id,
-      scope: `${record.record_id} - ${record.account_name.trim()}`,
-      current: segmentValue || "(blank)",
-      issue: "Segment is unavailable for planning and routing rules.",
-      suggestedValue: suggestion.suggestedValue,
-      confidence: suggestion.confidence,
-      rationale: suggestion.rationale,
-      reviewState: suggestionStateLabel(suggestion),
-    }));
+    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => {
+      const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      return {
+        id: record.record_id,
+        scope: `${record.record_id} - ${record.account_name.trim()}`,
+        current: segmentValue || "(blank)",
+        issue: "Segment is unavailable for planning and routing rules.",
+        suggestedValue: contextualSuggestion.suggestedValue,
+        confidence: contextualSuggestion.confidence,
+        rationale: contextualSuggestion.rationale,
+        reviewState: suggestionStateLabel(contextualSuggestion),
+        basis: suggestionBasisLabel(contextualSuggestion),
+        basisDetail: contextualSuggestion.basis?.detail ?? "",
+      };
+    });
   }
 
   if (type === "schema_mismatch") {
@@ -143,22 +174,27 @@ function getFlagRows(type: IssueType): FlagRow[] {
       confidence: item.suggestion?.confidence ?? 93,
       rationale: item.suggestion?.rationale ?? item.impact,
       reviewState: item.suggestion ? suggestionStateLabel(item.suggestion) : "Deterministic",
+      basis: "Based on deterministic normalization",
+      basisDetail: "Schema mappings are derived from source column names and supported issue checks.",
     }));
   }
 
   return [];
 }
 
-function getDiffRows(type: IssueType): DiffRow[] {
+function getDiffRows(type: IssueType, referenceContext: ReferenceContext): DiffRow[] {
   if (type === "inconsistent_state") {
-    return DETECTED.inconsistentStates.map(({ record, currentValue, standardValue, suggestion }) => ({
-      id: `${record.record_id}-state`,
-      account: record.account_name.trim(),
-      field: "state",
-      before: currentValue,
-      after: standardValue,
-      basis: `${suggestion.confidence}% confidence - ${suggestion.rationale}`,
-    }));
+    return DETECTED.inconsistentStates.map(({ record, currentValue, suggestion }) => {
+      const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      return {
+        id: `${record.record_id}-state`,
+        account: record.account_name.trim(),
+        field: "state",
+        before: currentValue,
+        after: contextualSuggestion.suggestedValue,
+        basis: `${contextualSuggestion.confidence}% confidence - ${suggestionBasisLabel(contextualSuggestion)}. ${contextualSuggestion.rationale}`,
+      };
+    });
   }
 
   if (type === "naming_format") {
@@ -175,10 +211,19 @@ function getDiffRows(type: IssueType): DiffRow[] {
   return [];
 }
 
-function getSuggestionPreview(type: IssueType): ResolutionSuggestion | null {
-  if (type === "missing_owner") return DETECTED.missingOwner[0]?.suggestion ?? null;
-  if (type === "missing_segment") return DETECTED.missingSegments[0]?.suggestion ?? null;
-  if (type === "inconsistent_state") return DETECTED.inconsistentStates[0]?.suggestion ?? null;
+function getSuggestionPreview(type: IssueType, referenceContext: ReferenceContext): ResolutionSuggestion | null {
+  if (type === "missing_owner") {
+    const item = DETECTED.missingOwner[0];
+    return item ? contextualizeSuggestion(type, item.record, item.suggestion, referenceContext) : null;
+  }
+  if (type === "missing_segment") {
+    const item = DETECTED.missingSegments[0];
+    return item ? contextualizeSuggestion(type, item.record, item.suggestion, referenceContext) : null;
+  }
+  if (type === "inconsistent_state") {
+    const item = DETECTED.inconsistentStates[0];
+    return item ? contextualizeSuggestion(type, item.record, item.suggestion, referenceContext) : null;
+  }
   if (type === "invalid_email") return DETECTED.invalidEmails.find((item) => item.suggestion)?.suggestion
     ?? fallbackSuggestion("email", "Flag for correction", "Some invalid emails cannot be corrected safely from available fields.");
   if (type === "schema_mismatch") return DETECTED.schemaMismatches.find((item) => item.suggestion)?.suggestion
@@ -190,35 +235,45 @@ function supportsManualFix(type: IssueType): boolean {
   return type === "missing_owner" || type === "missing_segment" || type === "invalid_email";
 }
 
-function getManualFixRows(type: IssueType): ManualFixRow[] {
+function getManualFixRows(type: IssueType, referenceContext: ReferenceContext): ManualFixRow[] {
   if (type === "missing_owner") {
-    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => ({
-      id: record.record_id,
-      recordId: record.record_id,
-      accountName: record.account_name.trim(),
-      field: "owner",
-      fieldLabel: "Owner",
-      currentValue: ownerValue,
-      suggestedValue: suggestion.suggestedValue,
-      confidence: suggestion.confidence,
-      rationale: suggestion.rationale,
-      context: `${record.segment || "No segment"} · ${record.state || "No state"}`,
-    }));
+    return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => {
+      const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      return {
+        id: record.record_id,
+        recordId: record.record_id,
+        accountName: record.account_name.trim(),
+        field: "owner",
+        fieldLabel: "Owner",
+        currentValue: ownerValue,
+        suggestedValue: contextualSuggestion.suggestedValue,
+        confidence: contextualSuggestion.confidence,
+        rationale: contextualSuggestion.rationale,
+        basis: suggestionBasisLabel(contextualSuggestion),
+        basisDetail: contextualSuggestion.basis?.detail ?? "",
+        context: `${record.segment || "No segment"} · ${record.state || "No state"}`,
+      };
+    });
   }
 
   if (type === "missing_segment") {
-    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => ({
-      id: record.record_id,
-      recordId: record.record_id,
-      accountName: record.account_name.trim(),
-      field: "segment",
-      fieldLabel: "Segment",
-      currentValue: segmentValue,
-      suggestedValue: suggestion.suggestedValue,
-      confidence: suggestion.confidence,
-      rationale: suggestion.rationale,
-      context: `${record.owner || "No owner"} · ${record.state || "No state"}`,
-    }));
+    return DETECTED.missingSegments.map(({ record, segmentValue, suggestion }) => {
+      const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      return {
+        id: record.record_id,
+        recordId: record.record_id,
+        accountName: record.account_name.trim(),
+        field: "segment",
+        fieldLabel: "Segment",
+        currentValue: segmentValue,
+        suggestedValue: contextualSuggestion.suggestedValue,
+        confidence: contextualSuggestion.confidence,
+        rationale: contextualSuggestion.rationale,
+        basis: suggestionBasisLabel(contextualSuggestion),
+        basisDetail: contextualSuggestion.basis?.detail ?? "",
+        context: `${record.owner || "No owner"} · ${record.state || "No state"}`,
+      };
+    });
   }
 
   if (type === "invalid_email") {
@@ -232,6 +287,8 @@ function getManualFixRows(type: IssueType): ManualFixRow[] {
       suggestedValue: suggestedValue ?? "",
       confidence: suggestion?.confidence ?? 48,
       rationale: suggestion?.rationale ?? "No safe correction was inferred from the available CRM fields.",
+      basis: "Based on record-only heuristic",
+      basisDetail: "Uses email syntax and domain evidence only.",
       context: `${record.contact_name} · ${reason}`,
     }));
   }
@@ -278,8 +335,8 @@ function buildManualChange(
   };
 }
 
-function FlagTable({ issueType }: { issueType: IssueType }) {
-  const rows = getFlagRows(issueType);
+function FlagTable({ issueType, referenceContext }: { issueType: IssueType; referenceContext: ReferenceContext }) {
+  const rows = getFlagRows(issueType, referenceContext);
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -305,7 +362,11 @@ function FlagTable({ issueType }: { issueType: IssueType }) {
                 <td className="px-4 py-3">
                   <ConfidenceDots pct={row.confidence} />
                 </td>
-                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">{row.rationale}</td>
+                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">
+                  <p>{row.rationale}</p>
+                  <p className="mt-1 font-bold text-indigo-700">{row.basis}</p>
+                  {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-400">{row.basisDetail}</p> : null}
+                </td>
                 <td className="px-4 py-3">
                   <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
                     {row.reviewState}
@@ -326,8 +387,8 @@ function FlagTable({ issueType }: { issueType: IssueType }) {
   );
 }
 
-function DiffTable({ issueType }: { issueType: IssueType }) {
-  const rows = getDiffRows(issueType);
+function DiffTable({ issueType, referenceContext }: { issueType: IssueType; referenceContext: ReferenceContext }) {
+  const rows = getDiffRows(issueType, referenceContext);
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
@@ -431,10 +492,10 @@ function ClusterView() {
   );
 }
 
-function RecordPreview({ issueType }: { issueType: IssueType }) {
+function RecordPreview({ issueType, referenceContext }: { issueType: IssueType; referenceContext: ReferenceContext }) {
   if (issueType === "duplicate_accounts") return <ClusterView />;
-  if (issueType === "inconsistent_state" || issueType === "naming_format") return <DiffTable issueType={issueType} />;
-  return <FlagTable issueType={issueType} />;
+  if (issueType === "inconsistent_state" || issueType === "naming_format") return <DiffTable issueType={issueType} referenceContext={referenceContext} />;
+  return <FlagTable issueType={issueType} referenceContext={referenceContext} />;
 }
 
 function ManualFixDrawer({
@@ -619,6 +680,8 @@ function ManualFixDrawer({
                           <ConfidenceDots pct={row.confidence} />
                         </div>
                         <p className="mt-2 text-xs leading-relaxed text-slate-600">{row.rationale}</p>
+                        <p className="mt-2 text-[11px] font-bold text-indigo-700">{row.basis}</p>
+                        {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-500">{row.basisDetail}</p> : null}
                         <p className="mt-2 text-[11px] font-bold text-slate-500">
                           Decision: {isUnchanged ? "Reviewed exception - left unchanged" : draft.decision === "suggested" ? "Using suggested value" : "Manual override"}
                         </p>
@@ -665,30 +728,40 @@ export default function ReviewScreen({
   issueStatuses,
   readinessScore,
   workflowMode,
+  referenceContext,
   activeIssueType,
+  lastSavedAt,
   onWorkflowModeChange,
   onApprove,
   onSkip,
   onUndo,
   onSelectIssue,
+  onSaveProgress,
   onFinish,
   onNavigate,
 }: ReviewScreenProps) {
   const workflow = WORKFLOW_MODES[workflowMode];
   const definitions = getWorkflowIssueDefinitions(workflowMode);
   const definition = definitions.find((item) => item.type === activeIssueType) ?? definitions[0];
-  const suggestionPreview = getSuggestionPreview(activeIssueType);
+  const activeReferenceContext = referenceContext ?? EMPTY_REFERENCE_CONTEXT;
+  const suggestionPreview = getSuggestionPreview(activeIssueType, activeReferenceContext);
   const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
-  const manualFixRows = getManualFixRows(activeIssueType);
+  const manualFixRows = getManualFixRows(activeIssueType, activeReferenceContext);
   const canManualFix = supportsManualFix(activeIssueType) && manualFixRows.length > 0;
   const [manualFixOpen, setManualFixOpen] = useState(false);
   const [recommendationCollapsed, setRecommendationCollapsed] = useState(false);
   const status = issueStatuses[activeIssueType];
   const reviewedCount = Object.values(issueStatuses).filter((item) => item !== "pending").length;
+  const approvedIssueCount = Object.values(issueStatuses).filter((item) => item === "approved").length;
+  const skippedIssueCount = Object.values(issueStatuses).filter((item) => item === "skipped").length;
+  const unresolvedDefinitions = definitions.filter((item) => issueStatuses[item.type] !== "approved");
+  const unresolvedBlockers = unresolvedDefinitions.filter((item) => (
+    item.severity === "blocking" || item.severity === "high" || item.severity === "medium-high"
+  ));
   const allReviewed = reviewedCount === definitions.length;
 
   const approveCurrentIssue = () => {
-    onApprove(activeIssueType, generateChanges(activeIssueType));
+    onApprove(activeIssueType, generateChanges(activeIssueType, activeReferenceContext));
   };
 
   const saveManualFixes = (changes: ApprovedChange[]) => {
@@ -763,10 +836,63 @@ export default function ReviewScreen({
               <StatusPill status={status} />
             </div>
           }
-          actions={<WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />}
+          actions={
+            <>
+              <WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />
+              <button
+                type="button"
+                onClick={onSaveProgress}
+                className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Save progress
+              </button>
+              <button
+                type="button"
+                onClick={onFinish}
+                className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white hover:bg-indigo-700"
+              >
+                Export current state
+              </button>
+            </>
+          }
         />
 
         <div className="space-y-5 px-6 py-5">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Review progress</p>
+                <p className="mt-1 text-2xl font-black text-slate-950 tabular-nums">{reviewedCount}/{definitions.length}</p>
+                <p className="text-xs text-slate-500">issue types reviewed</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Applied decisions</p>
+                <p className="mt-1 text-2xl font-black text-emerald-600 tabular-nums">{approvedIssueCount}</p>
+                <p className="text-xs text-slate-500">{skippedIssueCount} skipped or deferred</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Current readiness</p>
+                <p className="mt-1 text-2xl font-black text-slate-950 tabular-nums">{readinessScore}</p>
+                <p className="text-xs text-slate-500">{workflow.shortLabel} mode</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Unresolved risk</p>
+                <p className={`mt-1 text-2xl font-black tabular-nums ${unresolvedDefinitions.length > 0 ? "text-orange-600" : "text-emerald-600"}`}>
+                  {unresolvedDefinitions.length}
+                </p>
+                <p className="text-xs text-slate-500">{unresolvedBlockers.length} blockers or high-risk items</p>
+              </div>
+            </div>
+            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-xs leading-relaxed text-slate-600">
+                {unresolvedDefinitions.length > 0
+                  ? `Current export will include approved changes only. ${unresolvedBlockers[0]?.title ?? unresolvedDefinitions[0]?.title} remains unsafe for ${workflow.shortLabel.toLowerCase()} until reviewed.`
+                  : `All issue types have a reviewed decision for ${workflow.shortLabel.toLowerCase()}.`}
+              </p>
+              <p className="mt-1 text-[11px] font-bold text-slate-500">Last saved: {formatSavedAt(lastSavedAt)}</p>
+            </div>
+          </section>
+
           <RationaleBlock title={`Why this ranks for ${workflow.shortLabel}`}>
             <p>{definition.priorityReason}</p>
           </RationaleBlock>
@@ -798,7 +924,7 @@ export default function ReviewScreen({
               </span>
             </div>
             <div className="p-3.5">
-              <RecordPreview issueType={activeIssueType} />
+              <RecordPreview issueType={activeIssueType} referenceContext={activeReferenceContext} />
             </div>
           </section>
         </div>
@@ -890,6 +1016,12 @@ export default function ReviewScreen({
                   <ConfidenceDots pct={suggestionPreview.confidence} />
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-indigo-900">{suggestionPreview.rationale}</p>
+                <p className="mt-2 rounded-md border border-indigo-200 bg-white/70 px-2 py-1 text-[11px] font-bold text-indigo-800">
+                  {suggestionBasisLabel(suggestionPreview)}
+                </p>
+                {suggestionPreview.basis?.detail ? (
+                  <p className="mt-1 text-[11px] leading-relaxed text-indigo-800">{suggestionPreview.basis.detail}</p>
+                ) : null}
                 <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
               </section>
             ) : null}
@@ -970,6 +1102,23 @@ export default function ReviewScreen({
                 </button>
               </>
             )}
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={onSaveProgress}
+                className="flex h-9 items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800"
+              >
+                Save progress
+              </button>
+              <button
+                type="button"
+                onClick={onFinish}
+                className="flex h-9 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+              >
+                Export current
+              </button>
+            </div>
 
             {allReviewed ? (
               <button

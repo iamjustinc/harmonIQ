@@ -1,7 +1,8 @@
 "use client";
 
-import type { IssueStatus, IssueType, WorkflowMode } from "@/lib/types";
+import type { IssueStatus, IssueType, ReferenceContext, WorkflowMode } from "@/lib/types";
 import { DATASET_META } from "@/lib/data";
+import { activeReferenceSources, REFERENCE_SOURCE_DEFINITIONS } from "@/lib/referenceContext";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
 import Sidebar from "./Sidebar";
 import {
@@ -20,6 +21,7 @@ interface ProfileScreenProps {
   issueStatuses: Record<IssueType, IssueStatus>;
   readinessScore: number;
   workflowMode: WorkflowMode;
+  referenceContext: ReferenceContext;
   onWorkflowModeChange: (mode: WorkflowMode) => void;
   onBeginReview: () => void;
   onNavigate: (screen: "upload" | "profile" | "review" | "results") => void;
@@ -42,6 +44,7 @@ export default function ProfileScreen({
   issueStatuses,
   readinessScore,
   workflowMode,
+  referenceContext,
   onWorkflowModeChange,
   onBeginReview,
   onNavigate,
@@ -52,6 +55,7 @@ export default function ProfileScreen({
   const pendingIssueCount = definitions.filter((definition) => issueStatuses[definition.type] === "pending").length;
   const totalIssues = definitions.reduce((sum, definition) => sum + definition.recordCount, 0);
   const openImpactCount = impactMetrics.reduce((sum, metric) => sum + metric.value, 0);
+  const activeSources = activeReferenceSources(referenceContext);
   const issueCountsByCategory = definitions.reduce<Record<string, number>>((counts, definition) => {
     counts[definition.category] = (counts[definition.category] ?? 0) + definition.recordCount;
     return counts;
@@ -176,6 +180,46 @@ export default function ProfileScreen({
                   <ImpactMetricCard key={metric.label} metric={metric} />
                 ))}
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-950">Reference Context</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Optional structured sources currently grounding recommendation basis and confidence.
+                </p>
+              </div>
+              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
+                {activeSources.length} active sources
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              {REFERENCE_SOURCE_DEFINITIONS.map((definition) => {
+                const source = referenceContext.sources.find((item) => item.type === definition.type);
+                return (
+                  <div key={definition.type} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-black text-slate-900">{definition.label}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">{definition.expectedShape}</p>
+                      </div>
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                        source?.active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-white text-slate-500"
+                      }`}
+                      >
+                        {source?.active ? "Active" : "Inactive"}
+                      </span>
+                    </div>
+                    <p className="mt-2 truncate text-[11px] font-bold text-slate-700">{source?.fileName ?? "No file attached"}</p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">{source ? `${source.rowCount} parsed rows` : "Falls back to record-only heuristics"}</p>
+                    <p className="mt-2 text-xs leading-relaxed text-slate-600">{definition.effectDescription}</p>
+                  </div>
+                );
+              })}
             </div>
           </section>
 

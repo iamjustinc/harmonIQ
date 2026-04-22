@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import type { AppScreen, IssueType, IssueStatus, ApprovedChange, WorkflowMode } from "@/lib/types";
+import { useState, useCallback, useEffect } from "react";
+import type { AppScreen, IssueType, IssueStatus, ApprovedChange, WorkflowMode, ReferenceSourceType, ReferenceContext } from "@/lib/types";
 import {
   INITIAL_SCORE,
 } from "@/lib/issueDetection";
@@ -11,6 +11,13 @@ import {
   getWorkflowIssueOrder,
 } from "@/lib/workflows";
 import { DATASET_META } from "@/lib/data";
+import {
+  attachReferenceCsv,
+  createSampleReferenceContext,
+  EMPTY_REFERENCE_CONTEXT,
+  hasReferenceSources,
+  updateReferenceSourceActive,
+} from "@/lib/referenceContext";
 
 import UploadScreen from "@/components/UploadScreen";
 import ProfileScreen from "@/components/ProfileScreen";
@@ -32,6 +39,24 @@ interface DemoWorkspaceProps {
   initialSample?: boolean;
 }
 
+const SAVED_PROGRESS_KEY = "harmoniq.reviewProgress.v1";
+
+type SavedProgressSnapshot = {
+  version: 1;
+  savedAt: string;
+  screen: AppScreen;
+  fileName: string;
+  uploadedAt: string;
+  issueStatuses: Record<IssueType, IssueStatus>;
+  approvedChanges: ApprovedChange[];
+  readinessScore: number;
+  activeIssueType: IssueType;
+  workflowMode: WorkflowMode;
+  referenceContext: ReferenceContext;
+  reviewedIssueCount: number;
+  appliedIssueCount: number;
+};
+
 // ─── Demo workspace ──────────────────────────────────────────────────────────
 export default function DemoWorkspace({ initialSample = false }: DemoWorkspaceProps) {
   const [screen, setScreen] = useState<AppScreen>(initialSample ? "profile" : "upload");
@@ -42,11 +67,83 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   const [readinessScore, setReadinessScore] = useState(INITIAL_SCORE);
   const [workflowMode, setWorkflowMode] = useState<WorkflowMode>(DEFAULT_WORKFLOW_MODE);
   const [activeIssueType, setActiveIssueType] = useState<IssueType>(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
+  const [referenceContext, setReferenceContext] = useState<ReferenceContext>(() => initialSample ? createSampleReferenceContext() : EMPTY_REFERENCE_CONTEXT);
+  const [lastSavedAt, setLastSavedAt] = useState("");
+
+  useEffect(() => {
+    const rawProgress = window.localStorage.getItem(SAVED_PROGRESS_KEY);
+    if (!rawProgress) return;
+
+    try {
+      const saved = JSON.parse(rawProgress) as SavedProgressSnapshot;
+      if (saved.version !== 1) return;
+
+      setScreen(saved.screen === "upload" ? "profile" : saved.screen);
+      setFileName(saved.fileName || DATASET_META.fileName);
+      setUploadedAt(saved.uploadedAt);
+      setIssueStatuses(saved.issueStatuses);
+      setApprovedChanges(saved.approvedChanges);
+      setReadinessScore(saved.readinessScore);
+      setWorkflowMode(saved.workflowMode);
+      setActiveIssueType(saved.activeIssueType);
+      setReferenceContext(saved.referenceContext ?? EMPTY_REFERENCE_CONTEXT);
+      setLastSavedAt(saved.savedAt);
+    } catch {
+      window.localStorage.removeItem(SAVED_PROGRESS_KEY);
+    }
+  }, []);
+
+  const handleSaveProgress = useCallback(() => {
+    const savedAt = new Date().toISOString();
+    const snapshot: SavedProgressSnapshot = {
+      version: 1,
+      savedAt,
+      screen,
+      fileName: fileName || DATASET_META.fileName,
+      uploadedAt,
+      issueStatuses,
+      approvedChanges,
+      readinessScore,
+      activeIssueType,
+      workflowMode,
+      referenceContext,
+      reviewedIssueCount: Object.values(issueStatuses).filter((status) => status !== "pending").length,
+      appliedIssueCount: Object.values(issueStatuses).filter((status) => status === "approved").length,
+    };
+
+    window.localStorage.setItem(SAVED_PROGRESS_KEY, JSON.stringify(snapshot));
+    setLastSavedAt(savedAt);
+  }, [
+    activeIssueType,
+    approvedChanges,
+    fileName,
+    issueStatuses,
+    readinessScore,
+    referenceContext,
+    screen,
+    uploadedAt,
+    workflowMode,
+  ]);
 
   const handleAnalyze = useCallback((name: string) => {
+    if (name === DATASET_META.fileName && !hasReferenceSources(referenceContext)) {
+      setReferenceContext(createSampleReferenceContext());
+    }
     setFileName(name);
     setUploadedAt(new Date().toISOString());
     setScreen("profile");
+  }, [referenceContext]);
+
+  const handleAttachReferenceFile = useCallback((type: ReferenceSourceType, name: string, csv: string) => {
+    setReferenceContext((current) => attachReferenceCsv(current, type, name, csv));
+  }, []);
+
+  const handleAttachSampleReferencePack = useCallback(() => {
+    setReferenceContext(createSampleReferenceContext());
+  }, []);
+
+  const handleToggleReferenceSource = useCallback((type: ReferenceSourceType, active: boolean) => {
+    setReferenceContext((current) => updateReferenceSourceActive(current, type, active));
   }, []);
 
   const handleBeginReview = useCallback(() => {
@@ -106,6 +203,9 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
     setReadinessScore(INITIAL_SCORE);
     setWorkflowMode(DEFAULT_WORKFLOW_MODE);
     setActiveIssueType(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
+    setReferenceContext(EMPTY_REFERENCE_CONTEXT);
+    setLastSavedAt("");
+    window.localStorage.removeItem(SAVED_PROGRESS_KEY);
   }, []);
 
   const handleNavigate = useCallback((s: "upload" | "profile" | "review" | "results") => {
@@ -113,7 +213,15 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   }, []);
 
   if (screen === "upload") {
-    return <UploadScreen onAnalyze={handleAnalyze} />;
+    return (
+      <UploadScreen
+        referenceContext={referenceContext}
+        onAnalyze={handleAnalyze}
+        onAttachReferenceFile={handleAttachReferenceFile}
+        onAttachSampleReferencePack={handleAttachSampleReferencePack}
+        onToggleReferenceSource={handleToggleReferenceSource}
+      />
+    );
   }
 
   if (screen === "profile") {
@@ -124,6 +232,7 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
         issueStatuses={issueStatuses}
         readinessScore={readinessScore}
         workflowMode={workflowMode}
+        referenceContext={referenceContext}
         onWorkflowModeChange={handleWorkflowModeChange}
         onBeginReview={handleBeginReview}
         onNavigate={handleNavigate}
@@ -138,12 +247,15 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
         issueStatuses={issueStatuses}
         readinessScore={readinessScore}
         workflowMode={workflowMode}
+        referenceContext={referenceContext}
         activeIssueType={activeIssueType}
+        lastSavedAt={lastSavedAt}
         onWorkflowModeChange={handleWorkflowModeChange}
         onApprove={handleApprove}
         onSkip={handleSkip}
         onUndo={handleUndo}
         onSelectIssue={handleSelectIssue}
+        onSaveProgress={handleSaveProgress}
         onFinish={handleFinish}
         onNavigate={handleNavigate}
       />
