@@ -344,6 +344,10 @@ function buildManualChange(
       timestamp,
       riskLevel,
       userDecision: "Flagged",
+      basisLabel: "Manual exception reviewed",
+      basisStrength: "fallback",
+      resolutionType: "unresolved_review_required",
+      evidenceDetail: "Reviewer inspected the affected record and left the field unchanged for follow-up.",
     };
   }
 
@@ -358,6 +362,12 @@ function buildManualChange(
     timestamp,
     riskLevel,
     userDecision: "Accepted",
+    basisLabel: decision === "suggested" ? row.basis : "Manual override",
+    basisStrength: decision === "suggested" ? "strong" : "fallback",
+    resolutionType: "manual_override",
+    evidenceDetail: decision === "suggested"
+      ? `${row.basisDetail || row.rationale} Reviewer explicitly selected the suggested value in manual exception handling.`
+      : "Reviewer manually entered this value in the constrained exception workflow.",
   };
 }
 
@@ -615,6 +625,56 @@ function buildAIRecommendationEvidencePackage(
     candidateValues: sortedCandidates.map((candidate) => candidate.value),
     currentDatasetSignals,
   };
+}
+
+function aiAuditedRecordId(issueType: IssueType): string | undefined {
+  if (issueType === "missing_owner") return DETECTED.missingOwner[0]?.record.record_id;
+  if (issueType === "missing_segment") return DETECTED.missingSegments[0]?.record.record_id;
+  return undefined;
+}
+
+function aiAuditedField(issueType: IssueType): string | undefined {
+  if (issueType === "missing_owner") return "owner";
+  if (issueType === "missing_segment") return "segment";
+  return undefined;
+}
+
+function annotateChangesWithAIReview(
+  changes: ApprovedChange[],
+  issueType: IssueType,
+  recommendation: AIRecommendationResult | null,
+  candidates: AIRecommendationCandidate[]
+): ApprovedChange[] {
+  if (!recommendation || !AI_ISSUE_TYPES.has(issueType)) return changes;
+
+  const recordId = aiAuditedRecordId(issueType);
+  const field = aiAuditedField(issueType);
+  if (!recordId || !field) return changes;
+
+  return changes.map((change) => {
+    if (change.recordId !== recordId || change.field !== field) return change;
+
+    if (recommendation.recommendedValue && change.after === recommendation.recommendedValue) {
+      return {
+        ...change,
+        resolutionType: "ai_reviewed",
+        basisLabel: "AI-reviewed recommendation",
+        evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and selected "${recommendation.recommendedValue}" from ${recommendation.basisType.replace(/_/g, " ")} evidence. ${recommendation.evidenceSummary}`,
+        aiCandidateCount: candidates.length,
+      };
+    }
+
+    if (recommendation.manualReviewRequired) {
+      return {
+        ...change,
+        resolutionType: "unresolved_review_required",
+        evidenceDetail: `AI reviewed ${candidates.length} bounded candidates and declined to select a trusted value. ${recommendation.cautionNote ?? recommendation.evidenceSummary}`,
+        aiCandidateCount: candidates.length,
+      };
+    }
+
+    return change;
+  });
 }
 
 // ─── AI Recommendation Panel ─────────────────────────────────────────────────
@@ -1309,7 +1369,8 @@ export default function ReviewScreen({
   const allReviewed = reviewedCount === definitions.length;
 
   const approveCurrentIssue = () => {
-    onApprove(activeIssueType, generateChanges(activeIssueType, activeReferenceContext));
+    const changes = generateChanges(activeIssueType, activeReferenceContext);
+    onApprove(activeIssueType, annotateChangesWithAIReview(changes, activeIssueType, aiRecommendation, aiCandidates));
   };
 
   const saveManualFixes = (changes: ApprovedChange[]) => {

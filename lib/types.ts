@@ -82,6 +82,13 @@ export type ReferenceSourceType = "ownership_rules" | "segment_dictionary" | "cr
 
 export type SuggestionBasisStrength = "direct" | "strong" | "fallback" | "deterministic";
 
+export type ResolutionType =
+  | "deterministic_fix"
+  | "reference_backed"
+  | "ai_reviewed"
+  | "manual_override"
+  | "unresolved_review_required";
+
 export interface SuggestionBasis {
   type: ReferenceSourceType | "record_heuristic" | "deterministic";
   label: string;
@@ -243,6 +250,12 @@ export interface ApprovedChange {
   basisLabel?: string;
   /** Drives color coding in cleaned dataset preview */
   basisStrength?: SuggestionBasisStrength;
+  /** Explains how the final value or review status was produced */
+  resolutionType?: ResolutionType;
+  /** Concise evidence note for results and exported change summary */
+  evidenceDetail?: string;
+  /** Present when AI reviewed a bounded candidate set for this change */
+  aiCandidateCount?: number;
 }
 
 // ─── App State ─────────────────────────────────────────────────────────────

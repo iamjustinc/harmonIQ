@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import type { ApprovedChange, CRMRecord, IssueStatus, IssueType, SuggestionBasisStrength, WorkflowMode } from "@/lib/types";
+import type { ApprovedChange, CRMRecord, IssueStatus, IssueType, ResolutionType, WorkflowMode } from "@/lib/types";
 import { SAMPLE_DATA } from "@/lib/data";
 import { INITIAL_SCORE } from "@/lib/issueDetection";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
@@ -40,6 +40,65 @@ const BASE_HEADERS: (keyof CRMRecord)[] = [
   "email",
   "phone",
 ];
+
+const RESOLUTION_META: Record<ResolutionType, { label: string; shortLabel: string; className: string; previewClass: string; dotClass: string }> = {
+  deterministic_fix: {
+    label: "Deterministic fix",
+    shortLabel: "Deterministic",
+    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    previewClass: "bg-emerald-50 font-bold text-emerald-800",
+    dotClass: "bg-emerald-300",
+  },
+  reference_backed: {
+    label: "Reference-backed",
+    shortLabel: "Reference",
+    className: "border-indigo-200 bg-indigo-50 text-indigo-800",
+    previewClass: "bg-indigo-50 font-bold text-indigo-800",
+    dotClass: "bg-indigo-300",
+  },
+  ai_reviewed: {
+    label: "AI-reviewed",
+    shortLabel: "AI-reviewed",
+    className: "border-violet-200 bg-violet-50 text-violet-800",
+    previewClass: "bg-violet-50 font-bold text-violet-800",
+    dotClass: "bg-violet-300",
+  },
+  manual_override: {
+    label: "Manual override",
+    shortLabel: "Manual",
+    className: "border-slate-300 bg-slate-100 text-slate-800",
+    previewClass: "bg-slate-100 font-bold text-slate-800",
+    dotClass: "bg-slate-400",
+  },
+  unresolved_review_required: {
+    label: "Unresolved / review required",
+    shortLabel: "Review required",
+    className: "border-amber-200 bg-amber-50 text-amber-800",
+    previewClass: "bg-amber-50 font-bold text-amber-800",
+    dotClass: "bg-amber-300",
+  },
+};
+
+function inferResolutionType(change: ApprovedChange): ResolutionType {
+  if (change.changeId.startsWith("MAN-") && change.userDecision === "Accepted") return "manual_override";
+  if (change.userDecision === "Flagged" || isPlaceholderAfterValue(change.after)) return "unresolved_review_required";
+  if (change.basisStrength === "deterministic") return "deterministic_fix";
+  if (change.basisStrength === "direct" || change.basisStrength === "strong") return "reference_backed";
+  return "unresolved_review_required";
+}
+
+function getResolutionType(change: ApprovedChange): ResolutionType {
+  return change.resolutionType ?? inferResolutionType(change);
+}
+
+function ResolutionBadge({ type, compact = false }: { type: ResolutionType; compact?: boolean }) {
+  const meta = RESOLUTION_META[type];
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-bold ${compact ? "text-[9px]" : "text-[10px]"} ${meta.className}`}>
+      {compact ? meta.shortLabel : meta.label}
+    </span>
+  );
+}
 
 function applyChanges(records: CRMRecord[], changes: ApprovedChange[]): CRMRecord[] {
   const changesByRecord = new Map<string, ApprovedChange[]>();
@@ -83,18 +142,6 @@ function buildChangedFields(changes: ApprovedChange[]) {
   return changedFields;
 }
 
-/** Per-cell basis strength — drives color coding in the cleaned dataset preview */
-function buildChangeBasis(changes: ApprovedChange[]) {
-  const result = new Map<string, Map<string, SuggestionBasisStrength>>();
-  for (const change of changes) {
-    if (change.recordId === "DATASET") continue;
-    const fields = result.get(change.recordId) ?? new Map<string, SuggestionBasisStrength>();
-    fields.set(change.field, change.basisStrength ?? "fallback");
-    result.set(change.recordId, fields);
-  }
-  return result;
-}
-
 /** Track the `after` value per cell so placeholder states can be rendered distinctly */
 function buildChangeAfterValues(changes: ApprovedChange[]) {
   const result = new Map<string, Map<string, string>>();
@@ -102,6 +149,17 @@ function buildChangeAfterValues(changes: ApprovedChange[]) {
     if (change.recordId === "DATASET") continue;
     const fields = result.get(change.recordId) ?? new Map<string, string>();
     fields.set(change.field, change.after);
+    result.set(change.recordId, fields);
+  }
+  return result;
+}
+
+function buildChangeAudit(changes: ApprovedChange[]) {
+  const result = new Map<string, Map<string, ApprovedChange>>();
+  for (const change of changes) {
+    if (change.recordId === "DATASET") continue;
+    const fields = result.get(change.recordId) ?? new Map<string, ApprovedChange>();
+    fields.set(change.field, change);
     result.set(change.recordId, fields);
   }
   return result;
@@ -124,16 +182,11 @@ function isPlaceholderAfterValue(value: string): boolean {
 
 function previewCellClass(
   changed: boolean,
-  basisStrength: SuggestionBasisStrength | undefined,
+  resolutionType: ResolutionType | undefined,
   isId: boolean,
 ): string {
   if (!changed) return isId ? "font-mono text-slate-500" : "text-slate-700";
-  // Deterministic or direct/strong reference = high confidence → emerald
-  if (basisStrength === "deterministic" || basisStrength === "direct" || basisStrength === "strong") {
-    return "bg-emerald-50 font-bold text-emerald-800";
-  }
-  // Heuristic or fallback = review candidate → amber
-  return "bg-amber-50 font-bold text-amber-800";
+  return RESOLUTION_META[resolutionType ?? "unresolved_review_required"].previewClass;
 }
 
 function getCsvHeaders(records: CRMRecord[]) {
@@ -162,6 +215,10 @@ function changesToCsv(changes: ApprovedChange[]) {
     "after",
     "issue_type",
     "risk_level",
+    "resolution_type",
+    "basis",
+    "evidence_detail",
+    "ai_candidate_count",
     "user_decision",
     "timestamp",
   ];
@@ -177,6 +234,10 @@ function changesToCsv(changes: ApprovedChange[]) {
       change.after,
       change.issueType,
       change.riskLevel,
+      getResolutionType(change),
+      change.basisLabel ?? "",
+      change.evidenceDetail ?? "",
+      change.aiCandidateCount ?? "",
       change.userDecision,
       change.timestamp,
     ].map((value) => escape(String(value))).join(",")),
@@ -214,8 +275,22 @@ export default function ResultsScreen({
   const impactMetrics = getWorkflowImpactMetrics(workflowMode, issueStatuses);
   const cleanedData = useMemo(() => applyChanges(SAMPLE_DATA, approvedChanges), [approvedChanges]);
   const changedFields = useMemo(() => buildChangedFields(approvedChanges), [approvedChanges]);
-  const changeBasis = useMemo(() => buildChangeBasis(approvedChanges), [approvedChanges]);
   const changeAfterValues = useMemo(() => buildChangeAfterValues(approvedChanges), [approvedChanges]);
+  const changeAudit = useMemo(() => buildChangeAudit(approvedChanges), [approvedChanges]);
+  const resolutionCounts = useMemo(() => {
+    const counts: Record<ResolutionType, number> = {
+      deterministic_fix: 0,
+      reference_backed: 0,
+      ai_reviewed: 0,
+      manual_override: 0,
+      unresolved_review_required: 0,
+    };
+    for (const change of approvedChanges) {
+      counts[getResolutionType(change)] += 1;
+    }
+    return counts;
+  }, [approvedChanges]);
+  const aiCandidateReviewCount = approvedChanges.reduce((sum, change) => sum + (change.aiCandidateCount ?? 0), 0);
   const totalBefore = definitions.reduce((sum, definition) => sum + definition.recordCount, 0);
   const totalRemaining = definitions.reduce((sum, definition) => (
     sum + (issueStatuses[definition.type] === "approved" ? 0 : definition.recordCount)
@@ -423,6 +498,33 @@ export default function ResultsScreen({
             </div>
           </section>
 
+          <section className="rounded-lg border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-950">Review Proof Summary</h2>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  Every exported change is labeled by resolution type so final values can be traced back to deterministic logic, reference evidence, AI review, or manual exception handling.
+                </p>
+              </div>
+              <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700">
+                {aiCandidateReviewCount > 0
+                  ? `AI reviewed ${aiCandidateReviewCount} bounded candidates`
+                  : "AI audit appears after approved AI review"}
+              </span>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {(Object.keys(RESOLUTION_META) as ResolutionType[]).map((type) => (
+                <div key={type} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`h-2.5 w-2.5 rounded-sm ${RESOLUTION_META[type].dotClass}`} />
+                    <p className="font-mono text-lg font-black tabular-nums text-slate-950">{resolutionCounts[type]}</p>
+                  </div>
+                  <p className="mt-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">{RESOLUTION_META[type].label}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="rounded-lg border border-slate-200 bg-white">
             <div className="border-b border-slate-200 px-5 py-4">
               <h2 className="text-sm font-black text-slate-950">Issue Resolution Detail</h2>
@@ -479,19 +581,30 @@ export default function ResultsScreen({
                     {previewRows.map((row) => (
                       <tr key={row.record_id} className="hover:bg-slate-50">
                         {previewColumns.map((column) => {
-                          const changed = changedFields.get(row.record_id)?.has(column.key);
-                          const basis = changeBasis.get(row.record_id)?.get(column.key);
+                          const change = changeAudit.get(row.record_id)?.get(column.key);
+                          const changed = !!change;
+                          const resolutionType = change ? getResolutionType(change) : undefined;
                           const afterValue = changeAfterValues.get(row.record_id)?.get(column.key);
                           const isPlaceholder = changed && !!afterValue && isPlaceholderAfterValue(afterValue);
                           const cellValue = String(row[column.key] ?? "") || "-";
                           return (
                             <td
                               key={column.key}
-                              className={`max-w-[220px] truncate px-3 py-2.5 text-xs ${previewCellClass(!!changed, basis, column.key === "record_id")}`}
+                              className={`max-w-[240px] px-3 py-2.5 text-xs ${previewCellClass(changed, resolutionType, column.key === "record_id")}`}
                             >
-                              {isPlaceholder
-                                ? <span className="italic">{cellValue}</span>
-                                : cellValue}
+                              {changed && resolutionType ? (
+                                <div className="min-w-0 space-y-1">
+                                  <p className={`truncate ${isPlaceholder ? "italic" : ""}`}>{cellValue}</p>
+                                  <ResolutionBadge type={resolutionType} compact />
+                                  {change?.aiCandidateCount ? (
+                                    <p className="truncate text-[10px] font-bold text-violet-700">
+                                      AI reviewed {change.aiCandidateCount} candidates
+                                    </p>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <span className="truncate">{cellValue}</span>
+                              )}
                             </td>
                           );
                         })}
@@ -505,14 +618,12 @@ export default function ResultsScreen({
                   Showing {previewRows.length} of {cleanedData.length} rows. Export includes the full current dataset with approved changes only.
                 </p>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" />
-                    Deterministic or reference-backed
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
-                    <span className="h-2.5 w-2.5 rounded-sm bg-amber-200" />
-                    Inferred — review before relying
-                  </span>
+                  {(Object.keys(RESOLUTION_META) as ResolutionType[]).map((type) => (
+                    <span key={type} className="flex items-center gap-1.5 text-[11px] font-medium text-slate-500">
+                      <span className={`h-2.5 w-2.5 rounded-sm ${RESOLUTION_META[type].dotClass}`} />
+                      {RESOLUTION_META[type].shortLabel}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -534,10 +645,10 @@ export default function ResultsScreen({
             {approvedChanges.length > 0 ? (
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[920px] text-sm">
+                  <table className="w-full min-w-[1120px] text-sm">
                     <thead className="bg-slate-50">
                       <tr className="border-b border-slate-200">
-                        {["Change", "Record", "Field", "Before / After", "Issue", "Basis", "Decision"].map((heading) => (
+                        {["Change", "Record", "Field", "Before / After", "Issue", "Resolution", "Evidence", "Approval"].map((heading) => (
                           <th key={heading} className="px-3 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                             {heading}
                           </th>
@@ -546,7 +657,8 @@ export default function ResultsScreen({
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {approvedChanges.slice(0, 30).map((change) => {
-                        const definition = definitions.find((item) => item.type === change.issueType)!;
+                        const definition = definitions.find((item) => item.type === change.issueType);
+                        const resolutionType = getResolutionType(change);
                         return (
                           <tr key={change.changeId} className="hover:bg-slate-50">
                             <td className="px-3 py-2.5 font-mono text-[11px] text-slate-500">{change.changeId}</td>
@@ -555,9 +667,29 @@ export default function ResultsScreen({
                             <td className="px-3 py-2.5">
                               <DiffCell before={change.before} after={change.after} />
                             </td>
-                            <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">{definition.title}</td>
-                            <td className="px-3 py-2.5 text-[11px] text-slate-500">{change.basisLabel ?? "—"}</td>
-                            <td className="px-3 py-2.5 text-xs font-bold text-slate-700">{change.userDecision}</td>
+                            <td className="px-3 py-2.5 text-xs font-semibold text-slate-700">
+                              {definition?.title ?? change.issueType.replace(/_/g, " ")}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <ResolutionBadge type={resolutionType} />
+                            </td>
+                            <td className="max-w-[320px] px-3 py-2.5">
+                              <p className="text-[11px] font-bold text-slate-700">{change.basisLabel ?? RESOLUTION_META[resolutionType].label}</p>
+                              {change.evidenceDetail ? (
+                                <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-slate-500">{change.evidenceDetail}</p>
+                              ) : null}
+                              {change.aiCandidateCount ? (
+                                <p className="mt-1 text-[11px] font-bold text-violet-700">
+                                  {resolutionType === "ai_reviewed"
+                                    ? `AI reviewed ${change.aiCandidateCount} bounded candidates; recommendation approved.`
+                                    : `AI reviewed ${change.aiCandidateCount} bounded candidates; manual review remains required.`}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <p className="text-xs font-bold text-slate-700">{change.userDecision}</p>
+                              <p className="mt-0.5 text-[10px] text-slate-400">{formatDate(change.timestamp)}</p>
+                            </td>
                           </tr>
                         );
                       })}

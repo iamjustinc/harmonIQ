@@ -12,6 +12,7 @@ import type {
   SchemaMismatchRecord,
   ApprovedChange,
   ReferenceContext,
+  ResolutionType,
 } from "./types";
 import { SAMPLE_DATA } from "./data";
 import { EMPTY_REFERENCE_CONTEXT, contextualizeSuggestion } from "./referenceContext";
@@ -507,6 +508,24 @@ export function calculateScore(
 // ─── Generate ApprovedChanges for an issue type ─────────────────────────────
 let changeCounter = 1;
 
+function isPlaceholderChangeValue(value: string): boolean {
+  const lower = value.toLowerCase();
+  return (
+    lower.startsWith("needs") ||
+    lower.startsWith("awaiting") ||
+    lower.startsWith("no strong") ||
+    lower === "unassigned - review" ||
+    lower.includes("[flagged")
+  );
+}
+
+function resolutionTypeForSuggestion(suggestion: ResolutionSuggestion): ResolutionType {
+  if (isPlaceholderChangeValue(suggestion.suggestedValue)) return "unresolved_review_required";
+  if (suggestion.basis?.strength === "deterministic") return "deterministic_fix";
+  if (suggestion.basis?.strength === "direct" || suggestion.basis?.strength === "strong") return "reference_backed";
+  return "unresolved_review_required";
+}
+
 export function generateChanges(issueType: IssueType, referenceContext: ReferenceContext = EMPTY_REFERENCE_CONTEXT): ApprovedChange[] {
   const ts = new Date().toISOString();
   const changes: ApprovedChange[] = [];
@@ -527,6 +546,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: "Accepted",
         basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
         basisStrength: suggestion.basis?.strength ?? "fallback",
+        resolutionType: resolutionTypeForSuggestion(suggestion),
+        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
       });
     }
   }
@@ -548,6 +569,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
           userDecision: "Flagged",
           basisLabel: "Based on domain clustering analysis",
           basisStrength: "direct",
+          resolutionType: "unresolved_review_required",
+          evidenceDetail: "Potential duplicate cluster identified from shared domain evidence. harmonIQ suggests a canonical record but does not auto-merge.",
         });
       }
     }
@@ -568,6 +591,10 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: item.suggestedValue ? "Accepted" : "Flagged",
         basisLabel: item.suggestedValue ? "Based on email syntax repair" : "Flagged for manual correction",
         basisStrength: "deterministic",
+        resolutionType: item.suggestedValue ? "deterministic_fix" : "unresolved_review_required",
+        evidenceDetail: item.suggestedValue
+          ? "Deterministic syntax repair produced a safe candidate from the account domain."
+          : "No safe deterministic correction was available, so the record remains flagged for manual review.",
       });
     }
   }
@@ -588,6 +615,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: "Accepted",
         basisLabel: suggestion.basis?.label ?? "Based on record-only heuristic",
         basisStrength: suggestion.basis?.strength ?? "fallback",
+        resolutionType: resolutionTypeForSuggestion(suggestion),
+        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
       });
     }
   }
@@ -608,6 +637,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: "Accepted",
         basisLabel: suggestion.basis?.label ?? "Based on deterministic normalization",
         basisStrength: suggestion.basis?.strength ?? "deterministic",
+        resolutionType: resolutionTypeForSuggestion(suggestion),
+        evidenceDetail: suggestion.basis?.detail ?? suggestion.rationale,
       });
     }
   }
@@ -627,6 +658,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: "Accepted",
         basisLabel: "Based on deterministic normalization",
         basisStrength: "deterministic",
+        resolutionType: "deterministic_fix",
+        evidenceDetail: "Deterministic formatting cleanup normalized whitespace and casing without inferred business context.",
       });
     }
   }
@@ -646,6 +679,8 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
         userDecision: "Accepted",
         basisLabel: "Based on deterministic normalization",
         basisStrength: "deterministic",
+        resolutionType: "deterministic_fix",
+        evidenceDetail: "Deterministic schema mapping normalized supported field names for export.",
       });
     }
   }
