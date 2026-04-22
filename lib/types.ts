@@ -126,6 +126,7 @@ export interface ReferenceContextSource {
 
 export interface OwnershipRule {
   region: string;
+  state?: string;
   territory: string;
   segment: string;
   owner: string;

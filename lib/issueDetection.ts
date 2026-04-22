@@ -75,9 +75,9 @@ function suggestOwner(record: CRMRecord): ResolutionSuggestion {
   const segmentLabel = record.segment?.trim() || "no segment";
   return {
     field: "owner",
-    suggestedValue: "Needs manual assignment",
+    suggestedValue: "Unassigned - Review",
     confidence: 40,
-    rationale: `No ownership rules file or CRM reference export is loaded. State (${stateLabel}) and segment (${segmentLabel}) are present but insufficient to identify a rep without a verified routing source. Upload an ownership rules file to enable grounded suggestions.`,
+    rationale: `No exact clean CRM reference row or single-owner routing pattern supports a named owner. State (${stateLabel}) and segment (${segmentLabel}) are present but insufficient to identify a rep without verified owner evidence.`,
     reviewState: "review_required",
   };
 }
@@ -230,9 +230,9 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
       : `domain ends in ${enterpriseDomainTld}`;
     return {
       field: "segment",
-      suggestedValue: "Enterprise",
+      suggestedValue: "Needs Review",
       confidence: 62,
-      rationale: `Weak keyword signal only: ${signal}. No segment dictionary is loaded to validate this inference. This is a candidate for review — confirm the segment tier with your team before applying.`,
+      rationale: `Weak keyword signal only: ${signal}. The real cleaned export keeps missing segment values review-first unless a clean CRM reference row supplies a trusted segment.`,
       reviewState: "review_required",
     };
   }
@@ -241,9 +241,9 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
   if (matchedSmbKeyword) {
     return {
       field: "segment",
-      suggestedValue: "SMB",
+      suggestedValue: "Needs Review",
       confidence: 55,
-      rationale: `Weak keyword signal only: account name contains "${matchedSmbKeyword}". No segment dictionary is loaded to validate this. Confirm with your segment definitions before applying.`,
+      rationale: `Weak keyword signal only: account name contains "${matchedSmbKeyword}". The real cleaned export keeps missing segment values review-first unless a clean CRM reference row supplies a trusted segment.`,
       reviewState: "review_required",
     };
   }
@@ -251,7 +251,7 @@ function suggestSegment(record: CRMRecord): ResolutionSuggestion {
   // No keyword or domain signal at all — do not guess a named tier.
   return {
     field: "segment",
-    suggestedValue: "Needs segment review",
+    suggestedValue: "Needs Review",
     confidence: 32,
     rationale: "No account-name keyword or domain signal matched any segment pattern, and no segment dictionary is loaded. A segment cannot be inferred without additional context. Upload a segment dictionary or assign manually.",
     reviewState: "review_required",
@@ -527,8 +527,8 @@ function resolutionTypeForSuggestion(suggestion: ResolutionSuggestion): Resoluti
 }
 
 function unresolvedValueForIssue(issueType: IssueType): string {
-  if (issueType === "missing_owner") return "Needs manual assignment";
-  if (issueType === "missing_segment") return "Needs segment review";
+  if (issueType === "missing_owner") return "Unassigned - Review";
+  if (issueType === "missing_segment") return "Needs Review";
   return "[Flagged - review required]";
 }
 

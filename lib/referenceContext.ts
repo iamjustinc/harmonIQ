@@ -17,19 +17,19 @@ export const REFERENCE_SOURCE_DEFINITIONS: ReferenceSourceDefinition[] = [
     type: "ownership_rules",
     label: "Ownership rules",
     expectedShape: "region / territory / segment / owner",
-    effectDescription: "Improves missing-owner suggestions and routing rationale.",
+    effectDescription: "Inspect-only derived patterns. Disabled by default unless a single-owner pattern is consistent.",
   },
   {
     type: "segment_dictionary",
     label: "Segment dictionary",
     expectedShape: "segment / allowed_values / definition / lifecycle_stage",
-    effectDescription: "Validates segment taxonomy and missing-segment recommendations.",
+    effectDescription: "Validates allowed segment taxonomy from the real cleaned export.",
   },
   {
     type: "crm_reference",
     label: "Clean CRM reference export",
     expectedShape: "account / state / country / segment / owner / territory",
-    effectDescription: "Adds trusted CRM pattern context for owner, segment, and state fills.",
+    effectDescription: "Primary trusted source for owner, segment, and state recommendations.",
   },
 ];
 
@@ -51,7 +51,19 @@ const STATE_MAP: Record<string, string> = {
   illinois: "IL", ill: "IL", "ill.": "IL",
 };
 
-const INVALID_VALUES = new Set(["", "tbd", "unknown", "-", "n/a", "none", "unassigned"]);
+const INVALID_VALUES = new Set([
+  "",
+  "tbd",
+  "unknown",
+  "-",
+  "n/a",
+  "none",
+  "unassigned",
+  "unassigned - review",
+  "needs review",
+  "needs manual assignment",
+  "manual review required",
+]);
 
 const SAMPLE_OWNERSHIP_RULES = `region,territory,segment,owner,queue
 West,West Enterprise,Enterprise,Noah Kim,west-enterprise-routing
@@ -78,6 +90,122 @@ Redwood Biologics,redwoodbio.com,NY,United States,Enterprise,Lucas Rivera,Northe
 Stratus One,stratusone.com,TX,United States,Mid-Market,Sofia Martinez,South Growth
 MeridianOps,meridianops.com,CA,United States,Mid-Market,Olivia Park,West Growth
 Bridgewell Care,bridgewellcare.com,TX,United States,SMB,Liam Carter,South Commercial`;
+
+const REAL_CLEAN_CRM_REFERENCE = `record_id,account_name,domain,owner,segment,state,country,email,basis
+REC-001,Northstar Health,northstarhealth.com,Noah Kim,Enterprise,CA,United States,jordan.johnson@northstarhealth.com,Trusted cleaned export row
+REC-003,Altura Systems,alturasystems.com,Olivia Park,Enterprise,IL,United States,sam.flores@alturasystems.com,Trusted cleaned export row
+REC-004,Greenline Bio,greenlinebio.com,Ava Thompson,Enterprise,WA,United States,drew.johnson@greenlinebio.com,Trusted cleaned export row
+REC-005,Orbitiq,orbitiq.ai,Sofia Martinez,Enterprise,TX,United States,skyler.ward@orbitiq.ai,Trusted cleaned export row
+REC-006,Corepath,corepath.io,Noah Kim,SMB,IL,United States,skyler.morris@corepath.io,Trusted cleaned export row
+REC-007,Sableworks,sableworks.com,Olivia Park,Needs Review,CA,United States,casey.patel@sableworks.com,Trusted cleaned export row
+REC-008,Bluepeak Retail,bluepeakretail.com,Liam Carter,Needs Review,TX,United States,jamie@bluepeakretail.com,Trusted cleaned export row
+REC-009,Summitforge,summitforge.com,Ethan Brooks,Enterprise,TX,United States,reese.martinez@summitforge.com,Trusted cleaned export row
+REC-010,Meridianops,meridianops.com,Ethan Brooks,Needs Review,CA,United States,smorris@meridianops.com,Trusted cleaned export row
+REC-012,Lumengrid,lumengrid.com,Lucas Rivera,Enterprise,NY,United States,morgan.baker@lumengrid.com,Trusted cleaned export row
+REC-013,Pinecrest Health,pinecresthealth.com,Olivia Park,Mid-Market,IL,United States,harperwong@pinecresthealth.com,Trusted cleaned export row
+REC-014,Everfield Logistics,everfieldlogistics.com,Ethan Brooks,Enterprise,CA,United States,rjohnson@everfieldlogistics.com,Trusted cleaned export row
+REC-015,Asterpoint,asterpoint.com,Isabella Nguyen,Enterprise,TX,United States,emerson@asterpoint.com,Trusted cleaned export row
+REC-016,Maplestone Capital,maplestonecap.com,Liam Carter,Mid-Market,IL,United States,emerson.lee@maplestonecap.com,Trusted cleaned export row
+REC-017,Clearspring Media,clearspringmedia.com,Liam Carter,Enterprise,NY,United States,ava.martinez@clearspringmedia.com,Trusted cleaned export row
+REC-018,Verity Motors,veritymotors.com,Isabella Nguyen,Enterprise,NY,United States,mallen@veritymotors.com,Trusted cleaned export row
+REC-019,Northwind Foods,northwindfoods.com,Lucas Rivera,SMB,TX,United States,cameron.turner@northwindfoods.com,Trusted cleaned export row
+REC-020,Brightarc Education,brightarcedu.org,Isabella Nguyen,Enterprise,TX,United States,jordan.morris@brightarcedu.org,Trusted cleaned export row
+REC-021,Nimbus Telecom,nimbustelecom.com,Ethan Brooks,Needs Review,NY,United States,chris.smith@nimbustelecom.com,Trusted cleaned export row
+REC-022,Cobalt Freight,cobaltfreight.com,Liam Carter,Mid-Market,IL,United States,mmorris@cobaltfreight.com,Trusted cleaned export row
+REC-023,Silveroak Health,silveroakhealth.com,Olivia Park,Mid-Market,CA,United States,parker.turner@silveroakhealth.com,Trusted cleaned export row
+REC-024,Ironbridge Systems,ironbridgesys.com,Jordan Patel,Enterprise,CA,United States,cameron@ironbridgesys.com,Trusted cleaned export row
+REC-026,Atlas Commerce,atlascommerce.com,Noah Kim,Enterprise,IL,United States,jwong@atlascommerce.com,Trusted cleaned export row
+REC-027,Heliowave,heliowave.com,Maya Chen,Mid-Market,CA,United States,rclark@heliowave.com,Trusted cleaned export row
+REC-028,Redwood Biologics,redwoodbio.com,Noah Kim,Enterprise,NY,United States,samdavis@redwoodbio.com,Trusted cleaned export row
+REC-029,Vectorlane,vectorlane.io,Maya Chen,SMB,IL,United States,emerson.nguyen@vectorlane.io,Trusted cleaned export row
+REC-030,Trunorth Security,trunorthsec.com,Liam Carter,Enterprise,NY,United States,cameron.patel@trunorthsec.com,Trusted cleaned export row
+REC-032,Cloudmosaic,cloudmosaic.io,Maya Chen,Mid-Market,IL,United States,drew.wong@cloudmosaic.io,Trusted cleaned export row
+REC-033,Peakriver Finance,peakriverfin.com,Jordan Patel,Enterprise,TX,United States,morganturner@peakriverfin.com,Trusted cleaned export row
+REC-035,Stratus One,stratusone.com,Sofia Martinez,Mid-Market,TX,United States,reesekim@stratusone.com,Trusted cleaned export row
+REC-037,Westgate Health,westgatehealth.com,Lucas Rivera,SMB,NY,United States,jamie.nguyen@westgatehealth.com,Trusted cleaned export row
+REC-038,Urbannest Living,urbannestliving.com,Liam Carter,Needs Review,IL,United States,aturner@urbannestliving.com,Trusted cleaned export row
+REC-039,Tidal Metrics,tidalmetrics.io,Noah Kim,SMB,TX,United States,ava.turner@tidalmetrics.io,Trusted cleaned export row
+REC-040,Fieldstone Manufacturing,fieldstonemfg.com,Ava Thompson,Enterprise,NY,United States,morgan.martinez@fieldstonemfg.com,Trusted cleaned export row
+REC-041,Arcbloom,arcbloom.com,Ava Thompson,SMB,WA,United States,cjohnson@arcbloom.com,Trusted cleaned export row
+REC-042,Praxis Medical,praxismedical.com,Ethan Brooks,Needs Review,NY,United States,sam@praxismedical.com,Trusted cleaned export row
+REC-043,Voltaris,voltaris.com,Jordan Patel,Mid-Market,TX,United States,djohnson@voltaris.com,Trusted cleaned export row
+REC-045,Crescent Foods,crescentfoods.com,Liam Carter,SMB,IL,United States,dhall@crescentfoods.com,Trusted cleaned export row
+REC-046,Truespan Networks,truespan.net,Isabella Nguyen,SMB,CA,United States,parkerlee@truespan.net,Trusted cleaned export row
+REC-047,Mirapath,mirapath.com,Sofia Martinez,SMB,CA,United States,dpatel@mirapath.com,Trusted cleaned export row
+REC-048,Skyledger,skyledger.io,Olivia Park,Needs Review,NY,United States,morgan@skyledger.io,Trusted cleaned export row
+REC-049,Northgrove,northgrove.com,Sofia Martinez,Mid-Market,WA,United States,rlee@northgrove.com,Trusted cleaned export row
+REC-050,Terrafleet,terrafleet.com,Noah Kim,SMB,WA,United States,quinn@terrafleet.com,Trusted cleaned export row
+REC-051,Aquila Health,aquilahealth.com,Jordan Patel,Enterprise,IL,United States,harper@aquilahealth.com,Trusted cleaned export row
+REC-052,Primelayer,primelayer.io,Liam Carter,Needs Review,CA,United States,callen@primelayer.io,Trusted cleaned export row
+REC-054,Blueridge Labs,blueridgelabs.com,Maya Chen,SMB,NY,United States,emerson.young@blueridgelabs.com,Trusted cleaned export row
+REC-055,Civicaxis,civicaxis.org,Ethan Brooks,Mid-Market,IL,United States,rward@civicaxis.org,Trusted cleaned export row
+REC-056,Element Harbor,elementharbor.com,Sofia Martinez,SMB,WA,United States,jamie@elementharbor.com,Trusted cleaned export row
+REC-057,Vantacore,vantacore.com,Ethan Brooks,Needs Review,TX,United States,casey@vantacore.com,Trusted cleaned export row
+REC-058,Brightfield,brightfieldag.com,Olivia Park,Mid-Market,NY,United States,swong@brightfieldag.com,Trusted cleaned export row
+REC-059,Opentrail,opentrail.io,Maya Chen,SMB,NY,United States,cameron.morris@opentrail.io,Trusted cleaned export row
+REC-060,Signalforge,signalforge.com,Isabella Nguyen,SMB,WA,United States,pflores@signalforge.com,Trusted cleaned export row
+REC-062,Echovista,echovista.co,Liam Carter,SMB,CA,United States,cameron.morris@echovista.co,Trusted cleaned export row
+REC-064,Rivermint,rivermint.com,Sofia Martinez,Enterprise,WA,United States,jamie.hall@rivermint.com,Trusted cleaned export row
+REC-065,Pureline Labs,purelinelabs.com,Maya Chen,Enterprise,TX,United States,casey@purelinelabs.com,Trusted cleaned export row
+REC-066,North Harbor Tech,northharbortech.com,Jordan Patel,Needs Review,NY,United States,mallen@northharbortech.com,Trusted cleaned export row`;
+
+const REAL_SEGMENT_DICTIONARY = `segment,definition,source
+Enterprise,Large strategic accounts,Derived from cleaned_crm_export
+Mid-Market,Growth accounts between SMB and Enterprise,Derived from cleaned_crm_export
+SMB,Small and medium business accounts,Derived from cleaned_crm_export`;
+
+const REAL_OWNERSHIP_RULES = `region,state,segment,owner,territory,basis
+West,CA,Enterprise,Ethan Brooks,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Enterprise,Jordan Patel,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Enterprise,Noah Kim,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Mid-Market,Maya Chen,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,CA,Mid-Market,Olivia Park,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Ethan Brooks,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Liam Carter,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Olivia Park,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Isabella Nguyen,West SMB,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Liam Carter,West SMB,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Sofia Martinez,West SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Jordan Patel,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Noah Kim,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Olivia Park,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Ethan Brooks,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Liam Carter,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Maya Chen,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Olivia Park,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Needs Review,Liam Carter,Midwest Needs Review,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Liam Carter,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Maya Chen,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Noah Kim,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Ava Thompson,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Isabella Nguyen,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Liam Carter,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Lucas Rivera,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Noah Kim,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Mid-Market,Olivia Park,Northeast Mid-Market,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Ethan Brooks,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Jordan Patel,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Olivia Park,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,SMB,Lucas Rivera,Northeast SMB,Derived from cleaned_crm_export trusted rows
+Northeast,NY,SMB,Maya Chen,Northeast SMB,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Ethan Brooks,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Isabella Nguyen,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Jordan Patel,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Maya Chen,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Sofia Martinez,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Mid-Market,Jordan Patel,South Mid-Market,Derived from cleaned_crm_export trusted rows
+South,TX,Mid-Market,Sofia Martinez,South Mid-Market,Derived from cleaned_crm_export trusted rows
+South,TX,Needs Review,Ethan Brooks,South Needs Review,Derived from cleaned_crm_export trusted rows
+South,TX,Needs Review,Liam Carter,South Needs Review,Derived from cleaned_crm_export trusted rows
+South,TX,SMB,Lucas Rivera,South SMB,Derived from cleaned_crm_export trusted rows
+South,TX,SMB,Noah Kim,South SMB,Derived from cleaned_crm_export trusted rows
+West,WA,Enterprise,Ava Thompson,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,WA,Enterprise,Sofia Martinez,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,WA,Mid-Market,Sofia Martinez,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Ava Thompson,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Isabella Nguyen,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Noah Kim,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Sofia Martinez,West SMB,Derived from cleaned_crm_export trusted rows`;
 
 function sourceDefinition(type: ReferenceSourceType): ReferenceSourceDefinition {
   return REFERENCE_SOURCE_DEFINITIONS.find((item) => item.type === type) ?? REFERENCE_SOURCE_DEFINITIONS[0];
@@ -197,6 +325,7 @@ function buildContextForSource(
       sources: [source],
       ownershipRules: rows.map((row): OwnershipRule => ({
         region: pick(row, ["region", "geo", "area"]),
+        state: pick(row, ["state", "province", "region_state"]),
         territory: pick(row, ["territory", "territory_name", "routing_territory"]),
         segment: canonicalSegment(pick(row, ["segment", "market_segment", "account_segment"])),
         owner: pick(row, ["owner", "account_owner", "sales_owner", "rep"]),
@@ -267,6 +396,31 @@ export function createSampleReferenceContext(): ReferenceContext {
   ].reduce(mergeReferenceContext, EMPTY_REFERENCE_CONTEXT);
 }
 
+export function createRealReferenceContext(): ReferenceContext {
+  const context = [
+    buildContextForSource("crm_reference", "real_clean_crm_reference_from_cleaned.csv", REAL_CLEAN_CRM_REFERENCE, "2026-04-22T16:14:00Z"),
+    buildContextForSource("segment_dictionary", "real_segment_dictionary_from_cleaned.csv", REAL_SEGMENT_DICTIONARY, "2026-04-22T16:14:00Z"),
+    buildContextForSource("ownership_rules", "real_ownership_rules_from_cleaned.csv", REAL_OWNERSHIP_RULES, "2026-04-22T16:14:00Z"),
+  ].reduce(mergeReferenceContext, EMPTY_REFERENCE_CONTEXT);
+
+  return {
+    ...context,
+    sources: context.sources.map((source) => (
+      source.type === "ownership_rules"
+        ? {
+            ...source,
+            active: false,
+            effectDescription: "Inspect-only derived patterns. Disabled by default because owner assignment requires exact clean CRM reference evidence.",
+          }
+        : source
+    )),
+  };
+}
+
+export function hasSyntheticSampleReferenceContext(context: ReferenceContext): boolean {
+  return context.sources.some((source) => source.fileName.startsWith("sample_"));
+}
+
 export function updateReferenceSourceActive(
   context: ReferenceContext,
   type: ReferenceSourceType,
@@ -310,22 +464,29 @@ function fallbackBasis(issueType: IssueType): SuggestionBasis {
 function matchOwnershipRule(record: CRMRecord, context: ReferenceContext): OwnershipRule | undefined {
   if (!sourceIsActive(context, "ownership_rules")) return undefined;
   const recordRegion = regionForRecord(record);
+  const recordState = standardizeState(record.state);
   const recordSegment = canonicalSegment(record.segment);
 
-  return context.ownershipRules
+  const eligible = context.ownershipRules
     .filter((rule) => isValidReferenceValue(rule.owner))
     .map((rule) => {
-      const regionMatches = !!recordRegion && (
+      const ruleState = standardizeState(rule.state);
+      const stateMatches = !!recordState && !!ruleState && recordState === ruleState;
+      const regionMatches = stateMatches || (!!recordRegion && (
         rule.region.toLowerCase() === recordRegion.toLowerCase() ||
         rule.territory.toLowerCase().includes(recordRegion.toLowerCase())
-      );
+      ));
       const segmentMatches = !!rule.segment && !!recordSegment && rule.segment.toLowerCase() === recordSegment.toLowerCase();
       const ruleIsEligible = rule.segment ? regionMatches && segmentMatches : regionMatches;
-      const score = (regionMatches ? 3 : 0) + (segmentMatches ? 2 : 0);
+      const score = (stateMatches ? 4 : regionMatches ? 3 : 0) + (segmentMatches ? 2 : 0);
       return { rule, score, ruleIsEligible };
     })
-    .filter(({ ruleIsEligible }) => ruleIsEligible)
-    .sort((a, b) => b.score - a.score)[0]?.rule;
+    .filter(({ ruleIsEligible }) => ruleIsEligible);
+
+  const uniqueOwners = new Set(eligible.map(({ rule }) => rule.owner));
+  if (uniqueOwners.size !== 1) return undefined;
+
+  return eligible.sort((a, b) => b.score - a.score)[0]?.rule;
 }
 
 function matchReferenceRow(record: CRMRecord, context: ReferenceContext): CRMReferenceRow | undefined {
@@ -358,21 +519,6 @@ export function contextualizeSuggestion(
   };
 
   if (issueType === "missing_owner") {
-    const rule = matchOwnershipRule(record, context);
-    if (rule) {
-      const territoryLabel = rule.territory || rule.region || "matched territory";
-      const stateLabel = standardizeState(record.state) || record.state || "unknown state";
-      const segmentLabel = canonicalSegment(record.segment) || "no segment";
-      return {
-        ...baseSuggestion,
-        suggestedValue: rule.owner,
-        confidence: rule.segment ? 94 : 88,
-        rationale: `Ownership rule maps ${territoryLabel}${rule.segment ? ` and ${rule.segment}` : ""} accounts to ${rule.owner}. The match uses state ${stateLabel} and segment ${segmentLabel}; human review remains required before assignment.`,
-        reviewState: "needs_approval",
-        basis: basis("ownership_rules", "Based on ownership rules", `Matched state ${stateLabel} -> ${regionForRecord(record)} and segment ${segmentLabel} to ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`, "direct", rule.sourceName),
-      };
-    }
-
     const referenceRow = matchReferenceRow(record, context);
     if (referenceRow?.owner && isValidReferenceValue(referenceRow.owner)) {
       return {
@@ -382,6 +528,21 @@ export function contextualizeSuggestion(
         rationale: "Trusted CRM reference export contains the same account/domain with a populated owner. Treat as a strong candidate, not an automatic assignment.",
         reviewState: "needs_approval",
         basis: basis("crm_reference", "Based on reference CRM pattern", `Matched prior clean CRM row for ${referenceRow.domain || referenceRow.account}.`, "strong", referenceRow.sourceName),
+      };
+    }
+
+    const rule = matchOwnershipRule(record, context);
+    if (rule) {
+      const territoryLabel = rule.territory || rule.region || "matched territory";
+      const stateLabel = standardizeState(record.state) || record.state || "unknown state";
+      const segmentLabel = canonicalSegment(record.segment) || "no segment";
+      return {
+        ...baseSuggestion,
+        suggestedValue: rule.owner,
+        confidence: rule.segment ? 82 : 76,
+        rationale: `A low-trust ownership pattern was enabled and had a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""}. Treat this as review-first.`,
+        reviewState: "needs_approval",
+        basis: basis("ownership_rules", "Based on enabled ownership pattern", `Single-owner pattern matched state ${stateLabel} -> ${regionForRecord(record)} and segment ${segmentLabel} to ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`, "strong", rule.sourceName),
       };
     }
   }

@@ -41,7 +41,7 @@ export default function UploadScreen({
 }: UploadScreenProps) {
   const [uploadState, setUploadState] = useState<UploadState>("idle");
   const [fileName, setFileName] = useState("");
-  const [referenceMessage, setReferenceMessage] = useState("Optional context improves recommendation basis without changing the review gate.");
+  const [referenceMessage, setReferenceMessage] = useState("Real uploaded reference files are active by default. Ownership rules stay inspect-only unless explicitly enabled.");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadSample = useCallback(() => {
@@ -79,7 +79,7 @@ export default function UploadScreen({
 
   const attachSamplePack = useCallback(() => {
     onAttachSampleReferencePack();
-    setReferenceMessage("Demo reference pack attached: ownership rules, segment dictionary, and clean CRM reference.");
+    setReferenceMessage("Real uploaded reference context attached: clean CRM reference and segment dictionary active; ownership rules inspect-only.");
   }, [onAttachSampleReferencePack]);
 
   return (
@@ -283,7 +283,7 @@ export default function UploadScreen({
                   onClick={attachSamplePack}
                   className="shrink-0 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
                 >
-                  Attach demo pack
+                  Attach real context
                 </button>
               </div>
 

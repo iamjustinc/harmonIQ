@@ -13,8 +13,9 @@ import {
 import { DATASET_META } from "@/lib/data";
 import {
   attachReferenceCsv,
-  createSampleReferenceContext,
+  createRealReferenceContext,
   EMPTY_REFERENCE_CONTEXT,
+  hasSyntheticSampleReferenceContext,
   hasReferenceSources,
   updateReferenceSourceActive,
 } from "@/lib/referenceContext";
@@ -67,7 +68,7 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   const [readinessScore, setReadinessScore] = useState(INITIAL_SCORE);
   const [workflowMode, setWorkflowMode] = useState<WorkflowMode>(DEFAULT_WORKFLOW_MODE);
   const [activeIssueType, setActiveIssueType] = useState<IssueType>(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
-  const [referenceContext, setReferenceContext] = useState<ReferenceContext>(() => initialSample ? createSampleReferenceContext() : EMPTY_REFERENCE_CONTEXT);
+  const [referenceContext, setReferenceContext] = useState<ReferenceContext>(() => createRealReferenceContext());
   const [lastSavedAt, setLastSavedAt] = useState("");
 
   useEffect(() => {
@@ -86,7 +87,10 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
       setReadinessScore(saved.readinessScore);
       setWorkflowMode(saved.workflowMode);
       setActiveIssueType(saved.activeIssueType);
-      setReferenceContext(saved.referenceContext ?? EMPTY_REFERENCE_CONTEXT);
+      const savedReferenceContext = saved.referenceContext ?? EMPTY_REFERENCE_CONTEXT;
+      setReferenceContext(hasSyntheticSampleReferenceContext(savedReferenceContext) || !hasReferenceSources(savedReferenceContext)
+        ? createRealReferenceContext()
+        : savedReferenceContext);
       setLastSavedAt(saved.savedAt);
     } catch {
       window.localStorage.removeItem(SAVED_PROGRESS_KEY);
@@ -126,8 +130,8 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   ]);
 
   const handleAnalyze = useCallback((name: string) => {
-    if (name === DATASET_META.fileName && !hasReferenceSources(referenceContext)) {
-      setReferenceContext(createSampleReferenceContext());
+    if (!hasReferenceSources(referenceContext) || hasSyntheticSampleReferenceContext(referenceContext)) {
+      setReferenceContext(createRealReferenceContext());
     }
     setFileName(name);
     setUploadedAt(new Date().toISOString());
@@ -139,7 +143,7 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
   }, []);
 
   const handleAttachSampleReferencePack = useCallback(() => {
-    setReferenceContext(createSampleReferenceContext());
+    setReferenceContext(createRealReferenceContext());
   }, []);
 
   const handleToggleReferenceSource = useCallback((type: ReferenceSourceType, active: boolean) => {
@@ -203,7 +207,7 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
     setReadinessScore(INITIAL_SCORE);
     setWorkflowMode(DEFAULT_WORKFLOW_MODE);
     setActiveIssueType(getWorkflowIssueOrder(DEFAULT_WORKFLOW_MODE)[0]);
-    setReferenceContext(EMPTY_REFERENCE_CONTEXT);
+    setReferenceContext(createRealReferenceContext());
     setLastSavedAt("");
     window.localStorage.removeItem(SAVED_PROGRESS_KEY);
   }, []);

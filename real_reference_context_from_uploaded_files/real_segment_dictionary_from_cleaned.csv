@@ -1,0 +1,4 @@
+segment,definition,source
+Enterprise,Large strategic accounts,Derived from cleaned_crm_export
+Mid-Market,Growth accounts between SMB and Enterprise,Derived from cleaned_crm_export
+SMB,Small and medium business accounts,Derived from cleaned_crm_export

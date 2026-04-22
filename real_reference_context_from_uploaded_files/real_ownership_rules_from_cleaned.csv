@@ -1,0 +1,52 @@
+region,state,segment,owner,territory,basis
+West,CA,Enterprise,Ethan Brooks,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Enterprise,Jordan Patel,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Enterprise,Noah Kim,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,CA,Mid-Market,Maya Chen,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,CA,Mid-Market,Olivia Park,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Ethan Brooks,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Liam Carter,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,Needs Review,Olivia Park,West Needs Review,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Isabella Nguyen,West SMB,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Liam Carter,West SMB,Derived from cleaned_crm_export trusted rows
+West,CA,SMB,Sofia Martinez,West SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Jordan Patel,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Noah Kim,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Enterprise,Olivia Park,Midwest Enterprise,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Ethan Brooks,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Liam Carter,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Maya Chen,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Mid-Market,Olivia Park,Midwest Mid-Market,Derived from cleaned_crm_export trusted rows
+Midwest,IL,Needs Review,Liam Carter,Midwest Needs Review,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Liam Carter,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Maya Chen,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Midwest,IL,SMB,Noah Kim,Midwest SMB,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Ava Thompson,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Isabella Nguyen,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Liam Carter,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Lucas Rivera,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Enterprise,Noah Kim,Northeast Enterprise,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Mid-Market,Olivia Park,Northeast Mid-Market,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Ethan Brooks,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Jordan Patel,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,Needs Review,Olivia Park,Northeast Needs Review,Derived from cleaned_crm_export trusted rows
+Northeast,NY,SMB,Lucas Rivera,Northeast SMB,Derived from cleaned_crm_export trusted rows
+Northeast,NY,SMB,Maya Chen,Northeast SMB,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Ethan Brooks,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Isabella Nguyen,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Jordan Patel,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Maya Chen,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Enterprise,Sofia Martinez,South Enterprise,Derived from cleaned_crm_export trusted rows
+South,TX,Mid-Market,Jordan Patel,South Mid-Market,Derived from cleaned_crm_export trusted rows
+South,TX,Mid-Market,Sofia Martinez,South Mid-Market,Derived from cleaned_crm_export trusted rows
+South,TX,Needs Review,Ethan Brooks,South Needs Review,Derived from cleaned_crm_export trusted rows
+South,TX,Needs Review,Liam Carter,South Needs Review,Derived from cleaned_crm_export trusted rows
+South,TX,SMB,Lucas Rivera,South SMB,Derived from cleaned_crm_export trusted rows
+South,TX,SMB,Noah Kim,South SMB,Derived from cleaned_crm_export trusted rows
+West,WA,Enterprise,Ava Thompson,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,WA,Enterprise,Sofia Martinez,West Enterprise,Derived from cleaned_crm_export trusted rows
+West,WA,Mid-Market,Sofia Martinez,West Mid-Market,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Ava Thompson,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Isabella Nguyen,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Noah Kim,West SMB,Derived from cleaned_crm_export trusted rows
+West,WA,SMB,Sofia Martinez,West SMB,Derived from cleaned_crm_export trusted rows

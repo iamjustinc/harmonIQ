@@ -500,23 +500,42 @@ function buildAIRecommendationEvidencePackage(
 
   if (issueType === "missing_owner") {
     if (sourceActive(ctx, "ownership_rules")) {
+      const eligibleOwnershipRules = ctx.ownershipRules.filter((rule) => {
+        const ruleState = normalizeState(rule.state);
+        const ruleRegion = normalizeCompare(rule.region || rule.territory);
+        const stateMatches = !!ruleState && ruleState === normalizeState(record.state);
+        const regionMatches = stateMatches || (!!recordRegion && (
+          ruleRegion === normalizeCompare(recordRegion) ||
+          normalizeCompare(rule.territory).includes(normalizeCompare(recordRegion))
+        ));
+        const segmentMatches = !!rule.segment && normalizeCompare(rule.segment) === normalizeCompare(recordSegment);
+        return rule.segment ? regionMatches && segmentMatches : regionMatches;
+      });
+      const uniqueEligibleOwners = new Set(eligibleOwnershipRules.map((rule) => rule.owner).filter(Boolean));
+
       for (const rule of ctx.ownershipRules) {
         if (!rule.owner || isPlaceholderSuggestion(rule.owner)) continue;
+        const ruleState = normalizeState(rule.state);
         const ruleRegion = normalizeCompare(rule.region || rule.territory);
-        const regionMatches = recordRegion && (ruleRegion === normalizeCompare(recordRegion) || normalizeCompare(rule.territory).includes(normalizeCompare(recordRegion)));
-        const segmentMatches = rule.segment && normalizeCompare(rule.segment) === normalizeCompare(recordSegment);
+        const stateMatches = !!ruleState && ruleState === normalizeState(record.state);
+        const regionMatches = stateMatches || (!!recordRegion && (
+          ruleRegion === normalizeCompare(recordRegion) ||
+          normalizeCompare(rule.territory).includes(normalizeCompare(recordRegion))
+        ));
+        const segmentMatches = !!rule.segment && normalizeCompare(rule.segment) === normalizeCompare(recordSegment);
         if (!regionMatches && !segmentMatches) continue;
-        const basisType: AIBasisType = regionMatches && segmentMatches ? "direct_rule" : "weak_heuristic";
+        const exactRuleMatch = rule.segment ? regionMatches && segmentMatches : regionMatches;
+        const basisType: AIBasisType = exactRuleMatch && uniqueEligibleOwners.size === 1 ? "direct_rule" : "weak_heuristic";
         upsertCandidate(candidates, {
           value: rule.owner,
           basisType,
-          basisLabel: regionMatches && segmentMatches ? "Ownership rule match" : "Partial ownership rule match",
-          basisDetail: `${rule.territory || rule.region || "Routing rule"}${rule.segment ? ` / ${rule.segment}` : ""}${rule.queue ? ` / ${rule.queue}` : ""}`,
+          basisLabel: basisType === "direct_rule" ? "Consistent ownership pattern" : "Inspect-only ownership pattern",
+          basisDetail: `${rule.state || rule.region || "no state"} / ${rule.territory || "Routing rule"}${rule.segment ? ` / ${rule.segment}` : ""}${rule.queue ? ` / ${rule.queue}` : ""}`,
           confidenceBand: basisToConfidenceBand(basisType),
           source: rule.sourceName,
-          matchSummary: regionMatches && segmentMatches
-            ? "Rule matches both account region and segment."
-            : "Rule matches only part of the account context; review carefully.",
+          matchSummary: basisType === "direct_rule"
+            ? "Enabled ownership pattern has one consistent owner for this state/segment."
+            : "Pattern is ambiguous or partial in the real cleaned export; do not assign automatically.",
         });
       }
     }
@@ -689,8 +708,8 @@ function candidateComparisonSummary(
 }
 
 function unresolvedValueForIssue(issueType: IssueType): string {
-  if (issueType === "missing_owner") return "Needs manual assignment";
-  if (issueType === "missing_segment") return "Needs segment review";
+  if (issueType === "missing_owner") return "Unassigned - Review";
+  if (issueType === "missing_segment") return "Needs Review";
   return "[Flagged - review required]";
 }
 
