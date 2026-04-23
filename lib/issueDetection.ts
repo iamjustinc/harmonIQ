@@ -328,25 +328,44 @@ export function detectSchemaMismatches(): SchemaMismatchRecord[] {
   ];
 }
 
-// ─── Pre-computed detection results ─────────────────────────────────────────
-export const DETECTED = {
-  missingOwner:       detectMissingOwner(SAMPLE_DATA),
-  duplicates:         detectDuplicates(SAMPLE_DATA),
-  invalidEmails:      detectInvalidEmails(SAMPLE_DATA),
-  inconsistentStates: detectInconsistentStates(SAMPLE_DATA),
-  missingSegments:    detectMissingSegment(SAMPLE_DATA),
-  namingFormat:       detectNamingFormat(SAMPLE_DATA),
-  schemaMismatches:    detectSchemaMismatches(),
+// ─── Detection result shape ──────────────────────────────────────────────────
+export type DetectionResult = {
+  missingOwner:       ReturnType<typeof detectMissingOwner>;
+  duplicates:         ReturnType<typeof detectDuplicates>;
+  invalidEmails:      ReturnType<typeof detectInvalidEmails>;
+  inconsistentStates: ReturnType<typeof detectInconsistentStates>;
+  missingSegments:    ReturnType<typeof detectMissingSegment>;
+  namingFormat:       ReturnType<typeof detectNamingFormat>;
+  schemaMismatches:   ReturnType<typeof detectSchemaMismatches>;
 };
 
+/** Run all detectors against a given record set. */
+export function runDetection(records: CRMRecord[]): DetectionResult {
+  return {
+    missingOwner:       detectMissingOwner(records),
+    duplicates:         detectDuplicates(records),
+    invalidEmails:      detectInvalidEmails(records),
+    inconsistentStates: detectInconsistentStates(records),
+    missingSegments:    detectMissingSegment(records),
+    namingFormat:       detectNamingFormat(records),
+    schemaMismatches:   detectSchemaMismatches(),
+  };
+}
+
+// ─── Pre-computed detection results (sample data, used as fallback) ──────────
+export const DETECTED: DetectionResult = runDetection(SAMPLE_DATA);
+
 // ─── Issue definitions (display metadata + AI recommendation copy) ──────────
-export const ISSUE_DEFINITIONS: IssueDefinition[] = [
+
+/** Build the full IssueDefinition[] from a DetectionResult.  */
+export function buildIssueDefinitions(detected: DetectionResult): IssueDefinition[] {
+  return [
   {
     type: "missing_owner",
     title: "Missing Owner Fields",
     severity: "high",
     category: "Routing",
-    recordCount: DETECTED.missingOwner.length,
+    recordCount: detected.missingOwner.length,
     businessImpact: "Blocks routing readiness",
     workflowLabel: "Blocking Routing",
     confidence: 99,
@@ -367,7 +386,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Duplicate Account Records",
     severity: "high",
     category: "Records",
-    recordCount: DETECTED.duplicates.reduce((sum, c) => sum + c.records.length, 0),
+    recordCount: detected.duplicates.reduce((sum, c) => sum + c.records.length, 0),
     businessImpact: "Distorts pipeline reporting",
     workflowLabel: "Inflating Pipeline",
     confidence: 94,
@@ -388,7 +407,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Invalid Email Formats",
     severity: "medium-high",
     category: "Outreach",
-    recordCount: DETECTED.invalidEmails.length,
+    recordCount: detected.invalidEmails.length,
     businessImpact: "Reduces outreach usability",
     workflowLabel: "Blocking Outreach",
     confidence: 99,
@@ -409,7 +428,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Missing Segment Values",
     severity: "medium-high",
     category: "Segmentation",
-    recordCount: DETECTED.missingSegments.length,
+    recordCount: detected.missingSegments.length,
     businessImpact: "Weakens planning & targeting",
     workflowLabel: "Weakens Segmentation",
     confidence: 99,
@@ -430,7 +449,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Inconsistent State Values",
     severity: "medium",
     category: "Standardization",
-    recordCount: DETECTED.inconsistentStates.length,
+    recordCount: detected.inconsistentStates.length,
     businessImpact: "Breaks territory segmentation",
     workflowLabel: "Breaks Segmentation",
     confidence: 97,
@@ -451,7 +470,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Schema Mismatch",
     severity: "medium",
     category: "Schema",
-    recordCount: DETECTED.schemaMismatches.length,
+    recordCount: detected.schemaMismatches.length,
     businessImpact: "Creates field mapping risk",
     workflowLabel: "Schema Mapping",
     confidence: 93,
@@ -472,7 +491,7 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     title: "Improper Naming Format",
     severity: "low-medium",
     category: "Standardization",
-    recordCount: DETECTED.namingFormat.length,
+    recordCount: detected.namingFormat.length,
     businessImpact: "Reduces deduplication quality",
     workflowLabel: "Safe Cleanup",
     confidence: 96,
@@ -488,7 +507,11 @@ export const ISSUE_DEFINITIONS: IssueDefinition[] = [
     canBatchAccept: true,
     readinessImpact: 4,
   },
-];
+  ];
+}
+
+/** Static issue definitions built from sample data (backward-compat export). */
+export const ISSUE_DEFINITIONS: IssueDefinition[] = buildIssueDefinitions(DETECTED);
 
 // ─── Readiness score helpers ────────────────────────────────────────────────
 export const INITIAL_SCORE = 35;
@@ -561,12 +584,16 @@ function evidenceDetailForSuggestion(issueType: IssueType, suggestion: Resolutio
   return `Selected "${suggestion.suggestedValue}" because ${basisLabel}: ${basisDetail}${source} Evidence strength: ${strength}.`;
 }
 
-export function generateChanges(issueType: IssueType, referenceContext: ReferenceContext = EMPTY_REFERENCE_CONTEXT): ApprovedChange[] {
+export function generateChanges(
+  issueType: IssueType,
+  referenceContext: ReferenceContext = EMPTY_REFERENCE_CONTEXT,
+  detected: DetectionResult = DETECTED
+): ApprovedChange[] {
   const ts = new Date().toISOString();
   const changes: ApprovedChange[] = [];
 
   if (issueType === "missing_owner") {
-    for (const item of DETECTED.missingOwner) {
+    for (const item of detected.missingOwner) {
       const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
@@ -588,7 +615,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "duplicate_accounts") {
-    for (const cluster of DETECTED.duplicates) {
+    for (const cluster of detected.duplicates) {
       const nonCanonical = cluster.records.filter(r => r.record_id !== cluster.canonicalRecord?.record_id);
       for (const r of nonCanonical) {
         changes.push({
@@ -612,7 +639,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "invalid_email") {
-    for (const item of DETECTED.invalidEmails) {
+    for (const item of detected.invalidEmails) {
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: item.record.record_id,
@@ -635,7 +662,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "missing_segment") {
-    for (const item of DETECTED.missingSegments) {
+    for (const item of detected.missingSegments) {
       const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
@@ -657,7 +684,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "inconsistent_state") {
-    for (const item of DETECTED.inconsistentStates) {
+    for (const item of detected.inconsistentStates) {
       const suggestion = contextualizeSuggestion(issueType, item.record, item.suggestion, referenceContext);
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
@@ -679,7 +706,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "naming_format") {
-    for (const item of DETECTED.namingFormat) {
+    for (const item of detected.namingFormat) {
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: item.record.record_id,
@@ -700,7 +727,7 @@ export function generateChanges(issueType: IssueType, referenceContext: Referenc
   }
 
   if (issueType === "schema_mismatch") {
-    for (const item of DETECTED.schemaMismatches) {
+    for (const item of detected.schemaMismatches) {
       changes.push({
         changeId: `CHG-${String(changeCounter++).padStart(3, "0")}`,
         recordId: "DATASET",

@@ -9,7 +9,8 @@
       "mcp__Claude_Preview__preview_start",
       "Bash(pkill -f \"next dev\")",
       "Bash(npm install *)",
-      "Bash(npm uninstall *)"
+      "Bash(npm uninstall *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

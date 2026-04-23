@@ -106,6 +106,92 @@ export const SAMPLE_DATA: CRMRecord[] = [
   { record_id:"REC-079", account_name:"STRATUS ONE",               domain:"stratusone.com",          owner:"Sofia Martinez",   segment:"Mid-Market",  state:"California",  country:"United States", contact_name:"Rowan Brooks",        email:"rowanbrooks@stratusone.com",        phone:"(408) 803-5325" },
 ];
 
+// ─── CSV parser ─────────────────────────────────────────────────────────────
+
+/**
+ * Parse a raw CSV string into CRMRecord[]. Handles quoted fields and
+ * normalises common column-name variations. Rows missing record_id are
+ * auto-assigned REC-XXX identifiers. Rows that have no recognisable columns
+ * are silently skipped. Returns an empty array on parse failure.
+ */
+export function parseCrmCsv(csvText: string): CRMRecord[] {
+  try {
+    const lines = csvText.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+    if (lines.length < 2) return [];
+
+    // Tokenise a single CSV line respecting double-quoted fields.
+    function tokenise(line: string): string[] {
+      const tokens: string[] = [];
+      let cur = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') { cur += '"'; i++; }
+          else { inQuotes = !inQuotes; }
+        } else if (ch === "," && !inQuotes) {
+          tokens.push(cur.trim()); cur = "";
+        } else {
+          cur += ch;
+        }
+      }
+      tokens.push(cur.trim());
+      return tokens;
+    }
+
+    const headers = tokenise(lines[0]).map((h) => h.toLowerCase().replace(/[\s\-]/g, "_"));
+
+    // Map flexible header names to CRMRecord keys.
+    const COL_MAP: Record<string, keyof CRMRecord> = {
+      record_id: "record_id", id: "record_id",
+      account_name: "account_name", account: "account_name", company: "account_name",
+      domain: "domain", website: "domain",
+      owner: "owner", account_owner: "owner", rep: "owner",
+      segment: "segment", tier: "segment",
+      state: "state", province: "state",
+      country: "country",
+      contact_name: "contact_name", contact: "contact_name", name: "contact_name",
+      email: "email", email_address: "email",
+      phone: "phone", phone_number: "phone",
+    };
+
+    const colIndex: Partial<Record<keyof CRMRecord, number>> = {};
+    headers.forEach((h, i) => {
+      const mapped = COL_MAP[h];
+      if (mapped && !(mapped in colIndex)) colIndex[mapped] = i;
+    });
+
+    const records: CRMRecord[] = [];
+    let autoId = 1;
+
+    for (let r = 1; r < lines.length; r++) {
+      const line = lines[r].trim();
+      if (!line) continue;
+      const cells = tokenise(line);
+      const get = (key: keyof CRMRecord): string =>
+        (colIndex[key] !== undefined ? cells[colIndex[key] as number] ?? "" : "").trim();
+
+      const recordId = get("record_id") || `REC-${String(autoId++).padStart(3, "0")}`;
+      records.push({
+        record_id: recordId,
+        account_name: get("account_name"),
+        domain: get("domain"),
+        owner: get("owner"),
+        segment: get("segment"),
+        state: get("state"),
+        country: get("country") || "United States",
+        contact_name: get("contact_name"),
+        email: get("email"),
+        phone: get("phone"),
+      });
+    }
+
+    return records;
+  } catch {
+    return [];
+  }
+}
+
 export const DATASET_META = {
   fileName: "messy_crm_export.csv",
   rowCount: 79,
