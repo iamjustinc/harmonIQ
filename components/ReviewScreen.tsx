@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
+import type { EvidenceTier, IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
 import {
   fetchAIRecommendationWithStatus,
@@ -60,6 +60,7 @@ type FlagRow = {
   reviewState: string;
   basis: string;
   basisDetail: string;
+  evidenceTier?: EvidenceTier;
 };
 
 type DiffRow = {
@@ -151,6 +152,7 @@ function getFlagRows(type: IssueType, referenceContext: ReferenceContext): FlagR
         reviewState: suggestionStateLabel(contextualSuggestion),
         basis: suggestionBasisLabel(contextualSuggestion),
         basisDetail: contextualSuggestion.basis?.detail ?? "",
+        evidenceTier: contextualSuggestion.basis?.evidenceTier,
       };
     });
   }
@@ -186,6 +188,7 @@ function getFlagRows(type: IssueType, referenceContext: ReferenceContext): FlagR
         reviewState: suggestionStateLabel(contextualSuggestion),
         basis: suggestionBasisLabel(contextualSuggestion),
         basisDetail: contextualSuggestion.basis?.detail ?? "",
+        evidenceTier: contextualSuggestion.basis?.evidenceTier,
       };
     });
   }
@@ -452,6 +455,8 @@ function addExistingSuggestionCandidate(
 ) {
   if (isPlaceholderSuggestion(preview.suggestedValue)) return;
   const basisType = basisStrengthToAIBasisType(preview.basis?.strength);
+  const tier = preview.basis?.evidenceTier;
+  const tierSuffix = tier ? ` Tier: ${tier.replace(/_/g, " ")}.` : "";
   upsertCandidate(candidates, {
     value: preview.suggestedValue,
     basisType,
@@ -459,7 +464,8 @@ function addExistingSuggestionCandidate(
     basisDetail: preview.basis?.detail ?? "Candidate produced by deterministic harmonIQ issue logic.",
     confidenceBand: basisToConfidenceBand(basisType),
     source: preview.basis?.sourceName ?? "Deterministic issue logic",
-    matchSummary: `${preview.confidence}% deterministic confidence; ${preview.reviewState.replace(/_/g, " ")}.`,
+    matchSummary: `${preview.confidence}% deterministic confidence; ${preview.reviewState.replace(/_/g, " ")}.${tierSuffix}`,
+    evidenceTier: tier,
   });
 }
 
@@ -546,14 +552,20 @@ function buildAIRecommendationEvidencePackage(
         const domainMatches = normalizeCompare(row.domain) && normalizeCompare(row.domain) === normalizeCompare(record.domain);
         const accountMatches = normalizeCompare(row.account) && normalizeCompare(record.account_name).includes(normalizeCompare(row.account));
         if (!domainMatches && !accountMatches) continue;
+        const refRowId = row.record_id ? ` (${row.record_id})` : "";
+        const refState = row.state ? `, state: ${normalizeState(row.state) || row.state}` : "";
+        const refSegment = row.segment && !isPlaceholderSuggestion(row.segment) ? `, segment: ${canonicalSegment(row.segment)}` : "";
         upsertCandidate(candidates, {
           value: row.owner,
           basisType: "reference_pattern",
           basisLabel: "Clean CRM reference match",
-          basisDetail: `${row.account || "Reference account"} / ${row.domain || "no domain"} / ${row.territory || "no territory"}`,
+          basisDetail: `${row.account || "Reference account"}${refRowId} / ${row.domain || "no domain"}${refState}${refSegment}`,
           confidenceBand: "medium",
           source: row.sourceName,
-          matchSummary: domainMatches ? "Reference row matches account domain." : "Reference row matches account name.",
+          matchSummary: domainMatches
+            ? `Domain match: ${row.domain}${refRowId}. Reference account: ${row.account || "unknown"}${refState}${refSegment}.`
+            : `Account-name match: ${row.account}${refRowId}. Domain: ${row.domain || "unknown"}${refState}${refSegment}.`,
+          evidenceTier: "strong_reference_match",
         });
       }
     }
@@ -612,14 +624,20 @@ function buildAIRecommendationEvidencePackage(
         const domainMatches = normalizeCompare(row.domain) && normalizeCompare(row.domain) === normalizeCompare(record.domain);
         const accountMatches = normalizeCompare(row.account) && normalizeCompare(record.account_name).includes(normalizeCompare(row.account));
         if (!domainMatches && !accountMatches) continue;
+        const refRowId = row.record_id ? ` (${row.record_id})` : "";
+        const refState = row.state ? `, state: ${normalizeState(row.state) || row.state}` : "";
+        const segVal = canonicalSegment(row.segment);
         upsertCandidate(candidates, {
-          value: canonicalSegment(row.segment),
+          value: segVal,
           basisType: "reference_pattern",
           basisLabel: "Clean CRM reference match",
-          basisDetail: `${row.account || "Reference account"} / ${row.domain || "no domain"} / ${row.territory || "no territory"}`,
+          basisDetail: `${row.account || "Reference account"}${refRowId} / ${row.domain || "no domain"}${refState}, segment: ${segVal}`,
           confidenceBand: "medium",
           source: row.sourceName,
-          matchSummary: domainMatches ? "Reference row matches account domain." : "Reference row matches account name.",
+          matchSummary: domainMatches
+            ? `Domain match: ${row.domain}${refRowId}. Reference segment: ${segVal}${refState}.`
+            : `Account-name match: ${row.account}${refRowId}. Reference segment: ${segVal}${refState}.`,
+          evidenceTier: "strong_reference_match",
         });
       }
     }
@@ -871,6 +889,9 @@ function AIRecommendationPanel({
                       {candidate.value}
                     </p>
                     <p className="truncate text-[10px] text-slate-500">{candidate.basisLabel} · {candidate.source}</p>
+                    {candidate.evidenceTier ? (
+                      <p className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400">{candidate.evidenceTier.replace(/_/g, " ")}</p>
+                    ) : null}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
@@ -980,6 +1001,17 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                   <p>{row.rationale}</p>
                   <p className="mt-1 font-bold text-indigo-700">{row.basis}</p>
                   {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-400">{row.basisDetail}</p> : null}
+                  {row.evidenceTier ? (
+                    <p className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      row.evidenceTier === "exact_reference_match" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
+                      row.evidenceTier === "strong_reference_match" ? "border-indigo-200 bg-indigo-50 text-indigo-700" :
+                      row.evidenceTier === "rule_supported_match" ? "border-blue-200 bg-blue-50 text-blue-700" :
+                      row.evidenceTier === "weak_pattern_match" ? "border-amber-200 bg-amber-50 text-amber-700" :
+                      "border-slate-200 bg-slate-50 text-slate-500"
+                    }`}>
+                      {row.evidenceTier.replace(/_/g, " ")}
+                    </p>
+                  ) : null}
                 </td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${

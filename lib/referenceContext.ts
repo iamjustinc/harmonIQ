@@ -1,6 +1,7 @@
 import type {
   CRMRecord,
   CRMReferenceRow,
+  EvidenceTier,
   IssueType,
   OwnershipRule,
   ReferenceContext,
@@ -81,14 +82,17 @@ Enterprise,Enterprise;Strategic,Strategic and high-revenue accounts,Qualified
 Mid-Market,Mid-Market;Growth,Regional growth accounts,Qualified
 SMB,SMB;Small Business,Low-touch commercial accounts,Nurture`;
 
+// Simplified demo reference set. Not used in production — createRealReferenceContext()
+// loads the actual real_clean_crm_reference_from_cleaned.csv instead.
+// Owner values are aligned with the real cleaned export to prevent synthetic drift.
 const SAMPLE_CRM_REFERENCE = `account,domain,state,country,segment,owner,territory
 Northstar Health,northstarhealth.com,CA,United States,Enterprise,Noah Kim,West Enterprise
 SableWorks,sableworks.com,CA,United States,Mid-Market,Olivia Park,West Growth
 LumenGrid,lumengrid.com,NY,United States,Enterprise,Lucas Rivera,Northeast Enterprise
-Northwind Foods,northwindfoods.com,TX,United States,SMB,Liam Carter,South Commercial
-Redwood Biologics,redwoodbio.com,NY,United States,Enterprise,Lucas Rivera,Northeast Enterprise
+Northwind Foods,northwindfoods.com,TX,United States,SMB,Lucas Rivera,South Commercial
+Redwood Biologics,redwoodbio.com,NY,United States,Enterprise,Noah Kim,Northeast Enterprise
 Stratus One,stratusone.com,TX,United States,Mid-Market,Sofia Martinez,South Growth
-MeridianOps,meridianops.com,CA,United States,Mid-Market,Olivia Park,West Growth
+MeridianOps,meridianops.com,CA,United States,Mid-Market,Ethan Brooks,West Growth
 Bridgewell Care,bridgewellcare.com,TX,United States,SMB,Liam Carter,South Commercial`;
 
 const REAL_CLEAN_CRM_REFERENCE = `record_id,account_name,domain,owner,segment,state,country,email,basis
@@ -357,6 +361,7 @@ function buildContextForSource(
     ...EMPTY_REFERENCE_CONTEXT,
     sources: [source],
     crmReferenceRows: rows.map((row): CRMReferenceRow => ({
+      record_id: pick(row, ["record_id", "id"]) || undefined,
       account: pick(row, ["account", "account_name", "company"]),
       domain: pick(row, ["domain", "website", "account_domain"]),
       state: pick(row, ["state", "province", "region_state"]),
@@ -444,21 +449,36 @@ function sourceIsActive(context: ReferenceContext, type: ReferenceSourceType): b
   return context.sources.some((source) => source.type === type && source.active);
 }
 
+type BasisProvenance = Pick<SuggestionBasis,
+  "evidenceTier" | "matchedRecordId" | "matchedDomain" | "matchedAccount" | "matchedState" | "matchedSegment" | "refusalReason"
+>;
+
 function basis(
   type: SuggestionBasis["type"],
   label: string,
   detail: string,
   strength: SuggestionBasis["strength"],
-  sourceNameValue?: string
+  sourceNameValue?: string,
+  provenance?: Partial<BasisProvenance>,
 ): SuggestionBasis {
-  return { type, label, detail, sourceName: sourceNameValue, strength };
+  return { type, label, detail, sourceName: sourceNameValue, strength, ...provenance };
 }
 
 function fallbackBasis(issueType: IssueType): SuggestionBasis {
   if (issueType === "inconsistent_state" || issueType === "schema_mismatch") {
     return basis("deterministic", "Based on deterministic normalization", "Uses a controlled mapping rule rather than inferred business context.", "deterministic");
   }
-  return basis("record_heuristic", "Based on record-only heuristic", "No active reference source produced a safer direct match for this record.", "fallback");
+  return basis(
+    "record_heuristic",
+    "Based on record-only heuristic",
+    "No domain, account, or record_id match found in the clean CRM reference export. No active ownership rule covers this state/segment with a single consistent owner.",
+    "fallback",
+    undefined,
+    {
+      evidenceTier: "insufficient_evidence",
+      refusalReason: "No domain match in real_clean_crm_reference_from_cleaned.csv. Ownership rules are inspect-only and show multiple owners per territory — no single trusted owner can be inferred.",
+    }
+  );
 }
 
 function matchOwnershipRule(record: CRMRecord, context: ReferenceContext): OwnershipRule | undefined {
@@ -521,13 +541,45 @@ export function contextualizeSuggestion(
   if (issueType === "missing_owner") {
     const referenceRow = matchReferenceRow(record, context);
     if (referenceRow?.owner && isValidReferenceValue(referenceRow.owner)) {
+      const refDomain = normalizeValue(referenceRow.domain);
+      const refAccount = normalizeValue(referenceRow.account);
+      const refState = standardizeState(referenceRow.state);
+      const refSegment = canonicalSegment(referenceRow.segment ?? "");
+      const refRowId = referenceRow.record_id ?? "";
+      const recordDomain = normalizeValue(record.domain).toLowerCase();
+      const isDomainMatch = !!refDomain && refDomain.toLowerCase() === recordDomain;
+      const matchKind = isDomainMatch ? `domain match (${refDomain})` : `account-name match (${refAccount})`;
+      const refLabel = refRowId ? `${refRowId} — ${refAccount}` : refAccount;
+      // Exact tier when the reference row carries the same record_id as the messy record.
+      const isSameRecordId = !!refRowId && refRowId === record.record_id;
+      const evidenceTier: EvidenceTier = isSameRecordId ? "exact_reference_match" : "strong_reference_match";
+
+      const contextParts = [
+        refState ? `state: ${refState}` : "",
+        refSegment && isValidReferenceValue(refSegment) ? `segment: ${refSegment}` : "",
+      ].filter(Boolean).join(", ");
+
       return {
         ...baseSuggestion,
         suggestedValue: referenceRow.owner,
-        confidence: 88,
-        rationale: "Trusted CRM reference export contains the same account/domain with a populated owner. Treat as a strong candidate, not an automatic assignment.",
+        confidence: isSameRecordId ? 93 : 88,
+        rationale: `${referenceRow.sourceName} contains this account/domain with owner "${referenceRow.owner}" via ${matchKind} — reference row: ${refLabel}${contextParts ? ` (${contextParts})` : ""}. Treat as a strong candidate requiring approval, not an automatic assignment.`,
         reviewState: "needs_approval",
-        basis: basis("crm_reference", "Based on reference CRM pattern", `Matched prior clean CRM row for ${referenceRow.domain || referenceRow.account}.`, "strong", referenceRow.sourceName),
+        basis: basis(
+          "crm_reference",
+          "Based on reference CRM pattern",
+          `${matchKind} → ${referenceRow.sourceName}${refRowId ? ` (${refRowId})` : ""}. Account: ${refAccount}${refState ? `, state: ${refState}` : ""}${refSegment && isValidReferenceValue(refSegment) ? `, segment: ${refSegment}` : ""}.`,
+          "strong",
+          referenceRow.sourceName,
+          {
+            evidenceTier,
+            matchedRecordId: refRowId || undefined,
+            matchedDomain: isDomainMatch ? refDomain : undefined,
+            matchedAccount: refAccount || undefined,
+            matchedState: refState || undefined,
+            matchedSegment: refSegment && isValidReferenceValue(refSegment) ? refSegment : undefined,
+          }
+        ),
       };
     }
 
@@ -540,9 +592,20 @@ export function contextualizeSuggestion(
         ...baseSuggestion,
         suggestedValue: rule.owner,
         confidence: rule.segment ? 82 : 76,
-        rationale: `A low-trust ownership pattern was enabled and had a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""}. Treat this as review-first.`,
+        rationale: `Ownership rules file (${rule.sourceName}) has a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""} in ${territoryLabel}. Treat as review-first — ownership rules are inspect-only and must be confirmed against the clean CRM reference.`,
         reviewState: "needs_approval",
-        basis: basis("ownership_rules", "Based on enabled ownership pattern", `Single-owner pattern matched state ${stateLabel} -> ${regionForRecord(record)} and segment ${segmentLabel} to ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`, "strong", rule.sourceName),
+        basis: basis(
+          "ownership_rules",
+          "Based on enabled ownership pattern",
+          `Single-owner pattern matched state ${stateLabel} → ${regionForRecord(record)} and segment ${segmentLabel} → ${territoryLabel}${rule.queue ? ` via ${rule.queue}` : ""}.`,
+          "strong",
+          rule.sourceName,
+          {
+            evidenceTier: "rule_supported_match",
+            matchedState: stateLabel,
+            matchedSegment: segmentLabel,
+          }
+        ),
       };
     }
   }
@@ -559,9 +622,16 @@ export function contextualizeSuggestion(
           ...baseSuggestion,
           suggestedValue: dictionaryEntry.segment,
           confidence: Math.min(90, Math.max(baseSuggestion.confidence + 8, 84)),
-          rationale: `Keyword signal confirmed against segment dictionary: "${dictionaryEntry.segment}" is an allowed tier${dictionaryEntry.definition ? ` — ${dictionaryEntry.definition}` : ""}. Review before export because the source record was blank.`,
+          rationale: `Keyword signal confirmed against segment dictionary (${dictionaryEntry.sourceName}): "${dictionaryEntry.segment}" is an allowed tier${dictionaryEntry.definition ? ` — ${dictionaryEntry.definition}` : ""}. Review before export because the source record was blank.`,
           reviewState: "needs_approval",
-          basis: basis("segment_dictionary", "Based on segment dictionary", `${dictionaryEntry.segment} is an allowed segment${dictionaryEntry.lifecycleStage ? ` for ${dictionaryEntry.lifecycleStage} lifecycle records` : ""}.`, "direct", dictionaryEntry.sourceName),
+          basis: basis(
+            "segment_dictionary",
+            "Based on segment dictionary",
+            `${dictionaryEntry.segment} is an allowed segment in ${dictionaryEntry.sourceName}${dictionaryEntry.lifecycleStage ? ` for ${dictionaryEntry.lifecycleStage} lifecycle records` : ""}.`,
+            "direct",
+            dictionaryEntry.sourceName,
+            { evidenceTier: "rule_supported_match" }
+          ),
         };
       }
     }
@@ -569,13 +639,38 @@ export function contextualizeSuggestion(
     // CRM reference upgrade: works for both keyword candidates and no-signal records.
     const referenceRow = matchReferenceRow(record, context);
     if (referenceRow?.segment && isValidReferenceValue(referenceRow.segment)) {
+      const refDomain = normalizeValue(referenceRow.domain);
+      const refAccount = normalizeValue(referenceRow.account);
+      const refState = standardizeState(referenceRow.state);
+      const refRowId = referenceRow.record_id ?? "";
+      const recordDomain = normalizeValue(record.domain).toLowerCase();
+      const isDomainMatch = !!refDomain && refDomain.toLowerCase() === recordDomain;
+      const matchKind = isDomainMatch ? `domain match (${refDomain})` : `account-name match (${refAccount})`;
+      const isSameRecordId = !!refRowId && refRowId === record.record_id;
+      const evidenceTier: EvidenceTier = isSameRecordId ? "exact_reference_match" : "strong_reference_match";
+      const canonSeg = canonicalSegment(referenceRow.segment);
+
       return {
         ...baseSuggestion,
-        suggestedValue: canonicalSegment(referenceRow.segment),
-        confidence: 86,
-        rationale: `Trusted CRM reference export shows this account/domain assigned to the "${canonicalSegment(referenceRow.segment)}" segment. Keep review-first before applying — source record was blank.`,
+        suggestedValue: canonSeg,
+        confidence: isSameRecordId ? 91 : 86,
+        rationale: `${referenceRow.sourceName} shows this account/domain in the "${canonSeg}" segment via ${matchKind}${refRowId ? ` (${refRowId})` : ""}${refState ? `, state: ${refState}` : ""}. Keep review-first — source record was blank.`,
         reviewState: "needs_approval",
-        basis: basis("crm_reference", "Based on reference CRM pattern", `Matched prior clean CRM row for ${referenceRow.domain || referenceRow.account}.`, "strong", referenceRow.sourceName),
+        basis: basis(
+          "crm_reference",
+          "Based on reference CRM pattern",
+          `${matchKind} → ${referenceRow.sourceName}${refRowId ? ` (${refRowId})` : ""}. Account: ${refAccount}${refState ? `, state: ${refState}` : ""}, segment: ${canonSeg}.`,
+          "strong",
+          referenceRow.sourceName,
+          {
+            evidenceTier,
+            matchedRecordId: refRowId || undefined,
+            matchedDomain: isDomainMatch ? refDomain : undefined,
+            matchedAccount: refAccount || undefined,
+            matchedState: refState || undefined,
+            matchedSegment: canonSeg,
+          }
+        ),
       };
     }
   }
@@ -584,11 +679,27 @@ export function contextualizeSuggestion(
     const referenceRow = matchReferenceRow(record, context);
     const referenceState = standardizeState(referenceRow?.state);
     if (referenceState && referenceState === standardizeState(baseSuggestion.suggestedValue)) {
+      const refDomain = normalizeValue(referenceRow?.domain);
+      const refAccount = normalizeValue(referenceRow?.account);
+      const refRowId = referenceRow?.record_id ?? "";
       return {
         ...baseSuggestion,
         confidence: 98,
         rationale: "State normalization matches both the deterministic USPS mapping and the trusted CRM reference export.",
-        basis: basis("crm_reference", "Based on reference CRM pattern", `Reference row confirms ${referenceState} for ${referenceRow?.domain || referenceRow?.account}.`, "strong", referenceRow?.sourceName),
+        basis: basis(
+          "crm_reference",
+          "Based on reference CRM pattern",
+          `Reference row${refRowId ? ` (${refRowId})` : ""} confirms ${referenceState} for ${refDomain || refAccount}.`,
+          "strong",
+          referenceRow?.sourceName,
+          {
+            evidenceTier: "strong_reference_match",
+            matchedRecordId: refRowId || undefined,
+            matchedDomain: refDomain || undefined,
+            matchedAccount: refAccount || undefined,
+            matchedState: referenceState,
+          }
+        ),
       };
     }
   }

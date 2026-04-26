@@ -543,6 +543,15 @@ function isPlaceholderChangeValue(value: string): boolean {
 }
 
 function resolutionTypeForSuggestion(suggestion: ResolutionSuggestion): ResolutionType {
+  // Evidence tier takes priority when present — set by referenceContext.ts
+  const tier = suggestion.basis?.evidenceTier;
+  if (tier === "exact_reference_match" || tier === "strong_reference_match" || tier === "rule_supported_match") {
+    return "reference_backed";
+  }
+  if (tier === "insufficient_evidence" || tier === "weak_pattern_match") {
+    return "unresolved_review_required";
+  }
+  // Fallback for deterministic fixes and suggestions without a tier (state normalization, schema, etc.)
   if (isPlaceholderChangeValue(suggestion.suggestedValue)) return "unresolved_review_required";
   if (suggestion.basis?.strength === "deterministic") return "deterministic_fix";
   if (suggestion.basis?.strength === "direct" || suggestion.basis?.strength === "strong") return "reference_backed";
@@ -570,18 +579,30 @@ function evidenceDetailForSuggestion(issueType: IssueType, suggestion: Resolutio
   const basisDetail = suggestion.basis?.detail ?? suggestion.rationale;
   const source = suggestion.basis?.sourceName ? ` Source: ${suggestion.basis.sourceName}.` : "";
   const strength = suggestion.basis?.strength ?? "fallback";
+  const tier = suggestion.basis?.evidenceTier;
+  const tierLabel = tier ? ` Evidence tier: ${tier.replace(/_/g, " ")}.` : "";
 
   if (resolutionTypeForSuggestion(suggestion) === "unresolved_review_required") {
+    const refusalReason = suggestion.basis?.refusalReason ?? "";
     if (issueType === "missing_owner") {
-      return `No strong owner basis found. harmonIQ did not assign a named owner because contact names and email addresses are not owner evidence. ${basisDetail}${source}`;
+      return `No strong owner basis found.${tierLabel} ${refusalReason} harmonIQ did not assign a named owner because contact names, email addresses, and multi-owner territory patterns are not sufficient owner evidence.${source}`;
     }
     if (issueType === "missing_segment") {
-      return `No strong segment basis found. Weak inferred values are kept as review-required until supported by a segment dictionary, CRM reference, or manual override. ${basisDetail}${source}`;
+      return `No strong segment basis found.${tierLabel} ${refusalReason ? refusalReason + " " : ""}Weak inferred values are kept as review-required until supported by a segment dictionary, CRM reference, or manual override.${source}`;
     }
-    return `Manual review required. ${basisDetail}${source}`;
+    return `Manual review required.${tierLabel} ${basisDetail}${source}`;
   }
 
-  return `Selected "${suggestion.suggestedValue}" because ${basisLabel}: ${basisDetail}${source} Evidence strength: ${strength}.`;
+  // Build provenance string for reference-backed and rule-supported matches
+  const provenanceParts: string[] = [];
+  if (suggestion.basis?.matchedRecordId) provenanceParts.push(`reference row: ${suggestion.basis.matchedRecordId}`);
+  if (suggestion.basis?.matchedDomain) provenanceParts.push(`domain: ${suggestion.basis.matchedDomain}`);
+  if (suggestion.basis?.matchedAccount) provenanceParts.push(`account: ${suggestion.basis.matchedAccount}`);
+  if (suggestion.basis?.matchedState) provenanceParts.push(`state: ${suggestion.basis.matchedState}`);
+  if (suggestion.basis?.matchedSegment) provenanceParts.push(`segment: ${suggestion.basis.matchedSegment}`);
+  const provenance = provenanceParts.length > 0 ? ` Match provenance: ${provenanceParts.join(", ")}.` : "";
+
+  return `Selected "${suggestion.suggestedValue}" because ${basisLabel}: ${basisDetail}${provenance}${source}${tierLabel} Evidence strength: ${strength}.`;
 }
 
 export function generateChanges(

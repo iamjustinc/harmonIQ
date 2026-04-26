@@ -82,6 +82,23 @@ export type ReferenceSourceType = "ownership_rules" | "segment_dictionary" | "cr
 
 export type SuggestionBasisStrength = "direct" | "strong" | "fallback" | "deterministic";
 
+/**
+ * Evidence tier for owner/segment recommendations.
+ * Governs how confidently a suggested value should be treated and surfaced in the UI.
+ *
+ * - exact_reference_match:  same record_id + domain found in the clean CRM reference export
+ * - strong_reference_match: domain-only or account-name match in the clean CRM reference export
+ * - rule_supported_match:   single-owner ownership rule or validated segment dictionary entry
+ * - weak_pattern_match:     keyword heuristic or multi-owner territory signal only
+ * - insufficient_evidence:  no reference, no rule — manual review required
+ */
+export type EvidenceTier =
+  | "exact_reference_match"
+  | "strong_reference_match"
+  | "rule_supported_match"
+  | "weak_pattern_match"
+  | "insufficient_evidence";
+
 export type ResolutionType =
   | "deterministic_fix"
   | "reference_backed"
@@ -95,6 +112,20 @@ export interface SuggestionBasis {
   detail: string;
   sourceName?: string;
   strength: SuggestionBasisStrength;
+  /** Explicit evidence tier — governs trust level and UI treatment */
+  evidenceTier?: EvidenceTier;
+  /** record_id from the matched clean CRM reference row, when applicable */
+  matchedRecordId?: string;
+  /** Domain string that produced the reference match */
+  matchedDomain?: string;
+  /** Account name from the matched reference row */
+  matchedAccount?: string;
+  /** Standardized state from the matched reference row */
+  matchedState?: string;
+  /** Canonical segment from the matched reference row */
+  matchedSegment?: string;
+  /** Explains why a named value could not be assigned (for insufficient_evidence tier) */
+  refusalReason?: string;
 }
 
 export interface ResolutionSuggestion {
@@ -143,6 +174,8 @@ export interface SegmentDictionaryEntry {
 }
 
 export interface CRMReferenceRow {
+  /** record_id from the clean CRM reference export — enables exact-match tier */
+  record_id?: string;
   account?: string;
   domain?: string;
   state?: string;

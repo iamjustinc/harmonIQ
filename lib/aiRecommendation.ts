@@ -11,7 +11,7 @@
  * the UI can tell users that deterministic/reference suggestions are active.
  */
 
-import type { IssueType, WorkflowMode } from "./types";
+import type { EvidenceTier, IssueType, WorkflowMode } from "./types";
 
 // ─── Structured output schema ───────────────────────────────────────────────
 
@@ -36,6 +36,8 @@ export interface AIRecommendationCandidate {
   confidenceBand: AIConfidenceBand;
   source: string;
   matchSummary: string;
+  /** Propagated from SuggestionBasis.evidenceTier when set by referenceContext */
+  evidenceTier?: EvidenceTier;
 }
 
 export interface AIRecommendationRequest {
