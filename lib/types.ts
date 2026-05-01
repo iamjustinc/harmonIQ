@@ -96,6 +96,12 @@ export type EvidenceTier =
   | "exact_reference_match"
   | "strong_reference_match"
   | "rule_supported_match"
+  /**
+   * Territory exists in ownership rules but multiple reps share it —
+   * the assignment is ambiguous. Distinct from insufficient_evidence
+   * (no rules at all). Manual review required.
+   */
+  | "ambiguous_reference"
   | "weak_pattern_match"
   | "insufficient_evidence";
 

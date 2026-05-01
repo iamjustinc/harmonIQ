@@ -1,4 +1,5 @@
 import type {
+  ApprovedChange,
   IssueDefinition,
   IssueStatus,
   IssueType,
@@ -315,6 +316,27 @@ export function calculateWorkflowScore(
     return issueStatuses[definition.type] === "approved" ? sum + definition.readinessImpact : sum;
   }, INITIAL_SCORE);
   return Math.min(score, 100);
+}
+
+/**
+ * Applies a ceiling to the readiness score when unresolved manual-review items
+ * remain for owner or segment issue types. Prevents the score from reaching 100
+ * when placeholder values ("Unassigned - Review", "Needs Review") were logged
+ * instead of real assignments, or when evidence was insufficient/ambiguous.
+ *
+ * Cap: 97 — visibly incomplete without being zero, so the score accurately
+ * conveys that routing or segmentation still has open items.
+ */
+export function applyManualReviewCap(
+  score: number,
+  approvedChanges: ApprovedChange[]
+): number {
+  const unresolvedCount = approvedChanges.filter(
+    (change) =>
+      (change.issueType === "missing_owner" || change.issueType === "missing_segment") &&
+      (change.userDecision === "Flagged" || change.resolutionType === "unresolved_review_required")
+  ).length;
+  return unresolvedCount > 0 ? Math.min(score, 97) : score;
 }
 
 const impactCountByIssue: Record<IssueType, number> = {

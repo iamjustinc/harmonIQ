@@ -1006,6 +1006,7 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                       row.evidenceTier === "exact_reference_match" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
                       row.evidenceTier === "strong_reference_match" ? "border-indigo-200 bg-indigo-50 text-indigo-700" :
                       row.evidenceTier === "rule_supported_match" ? "border-blue-200 bg-blue-50 text-blue-700" :
+                      row.evidenceTier === "ambiguous_reference" ? "border-orange-200 bg-orange-50 text-orange-700" :
                       row.evidenceTier === "weak_pattern_match" ? "border-amber-200 bg-amber-50 text-amber-700" :
                       "border-slate-200 bg-slate-50 text-slate-500"
                     }`}>

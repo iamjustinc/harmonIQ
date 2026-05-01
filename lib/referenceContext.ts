@@ -464,14 +464,33 @@ function basis(
   return { type, label, detail, sourceName: sourceNameValue, strength, ...provenance };
 }
 
-function fallbackBasis(issueType: IssueType): SuggestionBasis {
+/**
+ * @param ambiguous  Pass true when eligible ownership rules exist for the
+ *                   record's territory but assign MORE than one owner. This
+ *                   emits evidenceTier "ambiguous_reference" rather than
+ *                   "insufficient_evidence", giving reviewers a clearer signal.
+ */
+function fallbackBasis(issueType: IssueType, ambiguous = false): SuggestionBasis {
   if (issueType === "inconsistent_state" || issueType === "schema_mismatch") {
     return basis("deterministic", "Based on deterministic normalization", "Uses a controlled mapping rule rather than inferred business context.", "deterministic");
+  }
+  if (ambiguous) {
+    return basis(
+      "record_heuristic",
+      "Territory exists but owner is ambiguous",
+      "Ownership rules for this state/segment assign multiple reps — no single owner can be inferred without the clean CRM reference. Owner refers to the internal account owner, not the contact email identity.",
+      "fallback",
+      undefined,
+      {
+        evidenceTier: "ambiguous_reference",
+        refusalReason: "Territory is covered in real_ownership_rules_from_cleaned.csv, but multiple reps share it. The clean CRM reference export (real_clean_crm_reference_from_cleaned.csv) did not match this domain/account — manual assignment required.",
+      }
+    );
   }
   return basis(
     "record_heuristic",
     "Based on record-only heuristic",
-    "No domain, account, or record_id match found in the clean CRM reference export. No active ownership rule covers this state/segment with a single consistent owner.",
+    "No domain, account, or record_id match found in the clean CRM reference export. No active ownership rule covers this state/segment with a single consistent owner. Owner refers to the internal account owner, not the contact email identity.",
     "fallback",
     undefined,
     {
@@ -507,6 +526,37 @@ function matchOwnershipRule(record: CRMRecord, context: ReferenceContext): Owner
   if (uniqueOwners.size !== 1) return undefined;
 
   return eligible.sort((a, b) => b.score - a.score)[0]?.rule;
+}
+
+/**
+ * Returns true when eligible ownership rules exist for the record's
+ * state/segment but assign MORE than one owner — the territory is covered
+ * but the assignment is ambiguous. Distinct from "insufficient_evidence"
+ * (no rules match at all). Uses the same scoring logic as matchOwnershipRule
+ * but does NOT require the ownership_rules source to be marked active, so it
+ * works even when rules are in inspect-only mode.
+ */
+function checkOwnershipAmbiguity(record: CRMRecord, context: ReferenceContext): boolean {
+  if (!context.ownershipRules.length) return false;
+  const recordRegion = regionForRecord(record);
+  const recordState = standardizeState(record.state);
+  const recordSegment = canonicalSegment(record.segment);
+
+  const eligible = context.ownershipRules
+    .filter((rule) => isValidReferenceValue(rule.owner))
+    .filter((rule) => {
+      const ruleState = standardizeState(rule.state);
+      const stateMatches = !!recordState && !!ruleState && recordState === ruleState;
+      const regionMatches = stateMatches || (!!recordRegion && (
+        rule.region.toLowerCase() === recordRegion.toLowerCase() ||
+        rule.territory.toLowerCase().includes(recordRegion.toLowerCase())
+      ));
+      const segmentMatches = !!rule.segment && !!recordSegment && rule.segment.toLowerCase() === recordSegment.toLowerCase();
+      return rule.segment ? regionMatches && segmentMatches : regionMatches;
+    });
+
+  const uniqueOwners = new Set(eligible.map((rule) => rule.owner));
+  return eligible.length > 0 && uniqueOwners.size > 1;
 }
 
 function matchReferenceRow(record: CRMRecord, context: ReferenceContext): CRMReferenceRow | undefined {
@@ -563,7 +613,7 @@ export function contextualizeSuggestion(
         ...baseSuggestion,
         suggestedValue: referenceRow.owner,
         confidence: isSameRecordId ? 93 : 88,
-        rationale: `${referenceRow.sourceName} contains this account/domain with owner "${referenceRow.owner}" via ${matchKind} — reference row: ${refLabel}${contextParts ? ` (${contextParts})` : ""}. Treat as a strong candidate requiring approval, not an automatic assignment.`,
+        rationale: `Matched account owner from trusted account/domain reference. ${referenceRow.sourceName} contains this account/domain with owner "${referenceRow.owner}" via ${matchKind} — reference row: ${refLabel}${contextParts ? ` (${contextParts})` : ""}. Owner refers to the internal account owner, not the contact email identity. Treat as a strong candidate requiring approval, not an automatic assignment.`,
         reviewState: "needs_approval",
         basis: basis(
           "crm_reference",
@@ -592,7 +642,7 @@ export function contextualizeSuggestion(
         ...baseSuggestion,
         suggestedValue: rule.owner,
         confidence: rule.segment ? 82 : 76,
-        rationale: `Ownership rules file (${rule.sourceName}) has a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""} in ${territoryLabel}. Treat as review-first — ownership rules are inspect-only and must be confirmed against the clean CRM reference.`,
+        rationale: `Ownership rules file (${rule.sourceName}) has a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""} in ${territoryLabel}. Owner refers to the internal account owner, not the contact email identity. Treat as review-first — ownership rules are inspect-only and must be confirmed against the clean CRM reference.`,
         reviewState: "needs_approval",
         basis: basis(
           "ownership_rules",
@@ -606,6 +656,15 @@ export function contextualizeSuggestion(
             matchedSegment: segmentLabel,
           }
         ),
+      };
+    }
+
+    // Both reference-row and rule checks failed. Detect whether the territory
+    // is known-but-ambiguous (multiple owners) vs. truly unmatched.
+    if (checkOwnershipAmbiguity(record, context)) {
+      return {
+        ...baseSuggestion,
+        basis: fallbackBasis(issueType, true),
       };
     }
   }

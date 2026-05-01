@@ -353,7 +353,16 @@ export default function ResultsScreen({
         <StickyDatasetHeader
           title="Results"
           subtitle={`${fileName || "messy_crm_export.csv"} · ${workflow.label} · ${reviewedIssueCount}/${definitions.length} issue types reviewed · ${approvedChanges.length} logged changes`}
-          badge={<StatusPill status={hasUnresolvedRisk ? "pending" : approvedIssueCount > 0 ? "approved" : "pending"} />}
+          badge={
+            hasUnresolvedRisk && reviewedIssueCount > 0 ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                Partially reviewed
+              </span>
+            ) : (
+              <StatusPill status={hasUnresolvedRisk ? "pending" : approvedIssueCount > 0 ? "approved" : "pending"} />
+            )
+          }
           actions={
             <>
               <WorkflowModeSelector value={workflowMode} onChange={onWorkflowModeChange} compact />

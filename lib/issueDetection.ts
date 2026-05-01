@@ -548,7 +548,7 @@ function resolutionTypeForSuggestion(suggestion: ResolutionSuggestion): Resoluti
   if (tier === "exact_reference_match" || tier === "strong_reference_match" || tier === "rule_supported_match") {
     return "reference_backed";
   }
-  if (tier === "insufficient_evidence" || tier === "weak_pattern_match") {
+  if (tier === "insufficient_evidence" || tier === "ambiguous_reference" || tier === "weak_pattern_match") {
     return "unresolved_review_required";
   }
   // Fallback for deterministic fixes and suggestions without a tier (state normalization, schema, etc.)
@@ -585,6 +585,9 @@ function evidenceDetailForSuggestion(issueType: IssueType, suggestion: Resolutio
   if (resolutionTypeForSuggestion(suggestion) === "unresolved_review_required") {
     const refusalReason = suggestion.basis?.refusalReason ?? "";
     if (issueType === "missing_owner") {
+      if (tier === "ambiguous_reference") {
+        return `Territory is ambiguous — multiple reps share this territory.${tierLabel} ${refusalReason} Owner refers to the internal account owner; contact email addresses and territory patterns with multiple reps are not sufficient to identify one.${source}`;
+      }
       return `No strong owner basis found.${tierLabel} ${refusalReason} harmonIQ did not assign a named owner because contact names, email addresses, and multi-owner territory patterns are not sufficient owner evidence.${source}`;
     }
     if (issueType === "missing_segment") {

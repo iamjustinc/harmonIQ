@@ -100,7 +100,12 @@ function validateAndNormalize(
     : undefined;
   if (
     selectedEvidence &&
-    (selectedEvidence.basisType === "weak_heuristic" || selectedEvidence.basisType === "no_basis")
+    (
+      selectedEvidence.basisType === "weak_heuristic" ||
+      selectedEvidence.basisType === "no_basis" ||
+      selectedEvidence.evidenceTier === "ambiguous_reference" ||
+      selectedEvidence.evidenceTier === "insufficient_evidence"
+    )
   ) {
     recommendedValue = null;
     rejectedWeakEvidence = true;
@@ -187,6 +192,10 @@ Evidence hierarchy:
 - dataset_pattern: same-domain or same-account evidence from the uploaded CRM dataset -> MEDIUM or LOW confidence
 - weak_heuristic: only keyword pattern, segment-only owner signal, or geographic guess -> LOW confidence, manual review required
 - no_basis: no supporting evidence -> manualReviewRequired = true, recommendedValue = null
+
+Special tier — ambiguous_reference: when the evidenceTier on a candidate is "ambiguous_reference", the territory exists in ownership rules but multiple reps share it. This means the territory is known but the assignment cannot be resolved without the clean CRM reference. Treat as no_basis: set manualReviewRequired = true and recommendedValue = null.
+
+Owner vs. contact: the "owner" field refers to the internal account owner (sales rep). A contact's email address is NEVER evidence of account ownership. Do not infer owner from email domain or contact name.
 
 Compare the candidate evidence. Prefer direct_rule over reference_pattern, reference_pattern over dataset_pattern, and dataset_pattern over weak_heuristic. Be concise and explicit about which evidence category matched.`;
 

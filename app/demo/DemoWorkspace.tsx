@@ -6,6 +6,7 @@ import {
   INITIAL_SCORE,
 } from "@/lib/issueDetection";
 import {
+  applyManualReviewCap,
   calculateWorkflowScore,
   DEFAULT_WORKFLOW_MODE,
   getWorkflowIssueOrder,
@@ -159,21 +160,22 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
 
   const handleWorkflowModeChange = useCallback((mode: WorkflowMode) => {
     setWorkflowMode(mode);
-    setReadinessScore(calculateWorkflowScore(issueStatuses, mode));
+    setReadinessScore(applyManualReviewCap(calculateWorkflowScore(issueStatuses, mode), approvedChanges));
     setActiveIssueType((current) => {
       const order = getWorkflowIssueOrder(mode);
       return order.includes(current) ? current : order[0];
     });
-  }, [issueStatuses]);
+  }, [approvedChanges, issueStatuses]);
 
   const handleApprove = useCallback((issueType: IssueType, changes: ApprovedChange[]) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "approved" as IssueStatus };
+    const nextChanges = [...approvedChanges, ...changes];
     setIssueStatuses(nextStatuses);
-    setReadinessScore(calculateWorkflowScore(nextStatuses, workflowMode));
-    setApprovedChanges(prev => [...prev, ...changes]);
+    setReadinessScore(applyManualReviewCap(calculateWorkflowScore(nextStatuses, workflowMode), nextChanges));
+    setApprovedChanges(nextChanges);
     const nextIssue = getWorkflowIssueOrder(workflowMode).find(t => t !== issueType && nextStatuses[t] === "pending");
     if (nextIssue) setActiveIssueType(nextIssue);
-  }, [issueStatuses, workflowMode]);
+  }, [approvedChanges, issueStatuses, workflowMode]);
 
   const handleSkip = useCallback((issueType: IssueType) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "skipped" as IssueStatus };
@@ -184,11 +186,12 @@ export default function DemoWorkspace({ initialSample = false }: DemoWorkspacePr
 
   const handleUndo = useCallback((issueType: IssueType) => {
     const nextStatuses = { ...issueStatuses, [issueType]: "pending" as IssueStatus };
+    const remainingChanges = approvedChanges.filter(c => c.issueType !== issueType);
     setIssueStatuses(nextStatuses);
-    setReadinessScore(calculateWorkflowScore(nextStatuses, workflowMode));
-    setApprovedChanges(prev => prev.filter(c => c.issueType !== issueType));
+    setReadinessScore(applyManualReviewCap(calculateWorkflowScore(nextStatuses, workflowMode), remainingChanges));
+    setApprovedChanges(remainingChanges);
     setActiveIssueType(issueType);
-  }, [issueStatuses, workflowMode]);
+  }, [approvedChanges, issueStatuses, workflowMode]);
 
   const handleSelectIssue = useCallback((issueType: IssueType) => {
     setActiveIssueType(issueType);
