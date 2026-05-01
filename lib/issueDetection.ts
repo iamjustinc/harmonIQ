@@ -586,9 +586,9 @@ function evidenceDetailForSuggestion(issueType: IssueType, suggestion: Resolutio
     const refusalReason = suggestion.basis?.refusalReason ?? "";
     if (issueType === "missing_owner") {
       if (tier === "ambiguous_reference") {
-        return `Territory is ambiguous — multiple reps share this territory.${tierLabel} ${refusalReason} Owner refers to the internal account owner; contact email addresses and territory patterns with multiple reps are not sufficient to identify one.${source}`;
+        return `Internal owner is ambiguous across this territory.${tierLabel} ${refusalReason} Owner is the internal account owner; the Email column is the account contact. Multiple reps share this territory, so no single owner could be confirmed.${source}`;
       }
-      return `No strong owner basis found.${tierLabel} ${refusalReason} harmonIQ did not assign a named owner because contact names, email addresses, and multi-owner territory patterns are not sufficient owner evidence.${source}`;
+      return `No strong internal owner basis found.${tierLabel} ${refusalReason} Owner is internal account ownership — it cannot be inferred from the contact email address, account name keywords, or multi-owner territory patterns.${source}`;
     }
     if (issueType === "missing_segment") {
       return `No strong segment basis found.${tierLabel} ${refusalReason ? refusalReason + " " : ""}Weak inferred values are kept as review-required until supported by a segment dictionary, CRM reference, or manual override.${source}`;

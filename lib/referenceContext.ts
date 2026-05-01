@@ -477,8 +477,8 @@ function fallbackBasis(issueType: IssueType, ambiguous = false): SuggestionBasis
   if (ambiguous) {
     return basis(
       "record_heuristic",
-      "Territory exists but owner is ambiguous",
-      "Ownership rules for this state/segment assign multiple reps — no single owner can be inferred without the clean CRM reference. Owner refers to the internal account owner, not the contact email identity.",
+      "Internal owner is ambiguous across this territory",
+      "Multiple reps share this territory in the ownership rules. The internal account owner cannot be inferred without a clean CRM reference match. Email shown is the account contact, not the owner.",
       "fallback",
       undefined,
       {
@@ -490,7 +490,7 @@ function fallbackBasis(issueType: IssueType, ambiguous = false): SuggestionBasis
   return basis(
     "record_heuristic",
     "Based on record-only heuristic",
-    "No domain, account, or record_id match found in the clean CRM reference export. No active ownership rule covers this state/segment with a single consistent owner. Owner refers to the internal account owner, not the contact email identity.",
+    "No domain, account, or record_id match found in the clean CRM reference export. No active ownership rule covers this state/segment with a single consistent internal owner. Owner is the internal account owner; Email is the account contact — these are separate fields.",
     "fallback",
     undefined,
     {
@@ -613,7 +613,7 @@ export function contextualizeSuggestion(
         ...baseSuggestion,
         suggestedValue: referenceRow.owner,
         confidence: isSameRecordId ? 93 : 88,
-        rationale: `Matched account owner from trusted account/domain reference. ${referenceRow.sourceName} contains this account/domain with owner "${referenceRow.owner}" via ${matchKind} — reference row: ${refLabel}${contextParts ? ` (${contextParts})` : ""}. Owner refers to the internal account owner, not the contact email identity. Treat as a strong candidate requiring approval, not an automatic assignment.`,
+        rationale: `Matched internal account owner from trusted CRM reference. ${referenceRow.sourceName} contains this account/domain with internal owner "${referenceRow.owner}" via ${matchKind} — reference row: ${refLabel}${contextParts ? ` (${contextParts})` : ""}. Owner is internal account ownership; Email is the account contact. Treat as a strong candidate requiring approval, not an automatic assignment.`,
         reviewState: "needs_approval",
         basis: basis(
           "crm_reference",
@@ -642,7 +642,7 @@ export function contextualizeSuggestion(
         ...baseSuggestion,
         suggestedValue: rule.owner,
         confidence: rule.segment ? 82 : 76,
-        rationale: `Ownership rules file (${rule.sourceName}) has a single consistent owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""} in ${territoryLabel}. Owner refers to the internal account owner, not the contact email identity. Treat as review-first — ownership rules are inspect-only and must be confirmed against the clean CRM reference.`,
+        rationale: `Ownership rules file (${rule.sourceName}) has a single consistent internal account owner for state ${stateLabel}${rule.segment ? ` and segment ${rule.segment}` : ""} in ${territoryLabel}. Owner is internal account ownership; Email is the account contact. Treat as review-first — ownership rules are inspect-only and must be confirmed against the clean CRM reference.`,
         reviewState: "needs_approval",
         basis: basis(
           "ownership_rules",

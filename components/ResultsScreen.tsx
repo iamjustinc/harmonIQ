@@ -574,7 +574,7 @@ export default function ResultsScreen({
           <section>
             <div className="mb-3 flex items-baseline justify-between gap-3">
               <h2 className="text-base font-black text-slate-950">Cleaned Dataset Preview</h2>
-              <p className="text-xs font-medium text-slate-500">Changed records first; changed fields highlighted.</p>
+              <p className="text-xs font-medium text-slate-500">Changed records first; Owner = internal account owner, Email = account contact.</p>
             </div>
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
               <div className="overflow-x-auto">
