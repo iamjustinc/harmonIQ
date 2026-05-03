@@ -766,6 +766,54 @@ export function contextualizeSuggestion(
   return baseSuggestion;
 }
 
+/**
+ * Returns every unique internal account owner name found across both the clean
+ * CRM reference rows and the ownership rules, sorted alphabetically.
+ * Placeholder values ("Needs Review", blanks, etc.) are excluded.
+ */
+export function getKnownOwners(context: ReferenceContext): string[] {
+  const owners = new Set<string>();
+  for (const row of context.crmReferenceRows) {
+    if (row.owner && isValidReferenceValue(row.owner)) owners.add(row.owner.trim());
+  }
+  for (const rule of context.ownershipRules) {
+    if (rule.owner && isValidReferenceValue(rule.owner)) owners.add(rule.owner.trim());
+  }
+  return [...owners].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * For a record where territory coverage is ambiguous (multiple owners share the
+ * same state/segment in the ownership rules), returns the specific owners that
+ * appear in the matching territory. This scopes the manual-selection list to
+ * plausible candidates rather than every known rep.
+ *
+ * Falls back to getKnownOwners() when no territory match is found at all, so
+ * insufficient_evidence records still show the full list of options.
+ */
+export function getAmbiguousOwners(record: CRMRecord, context: ReferenceContext): string[] {
+  const recordRegion = regionForRecord(record);
+  const recordState = standardizeState(record.state);
+  const recordSegment = canonicalSegment(record.segment);
+
+  const eligible = context.ownershipRules
+    .filter((rule) => isValidReferenceValue(rule.owner))
+    .filter((rule) => {
+      const ruleState = standardizeState(rule.state);
+      const stateMatches = !!recordState && !!ruleState && recordState === ruleState;
+      const regionMatches = stateMatches || (!!recordRegion && (
+        rule.region.toLowerCase() === recordRegion.toLowerCase() ||
+        rule.territory.toLowerCase().includes(recordRegion.toLowerCase())
+      ));
+      const segmentMatches = !!rule.segment && !!recordSegment && rule.segment.toLowerCase() === recordSegment.toLowerCase();
+      return rule.segment ? regionMatches && segmentMatches : regionMatches;
+    });
+
+  const uniqueOwners = [...new Set(eligible.map((rule) => rule.owner.trim()))].sort((a, b) => a.localeCompare(b));
+  // If no territory rules matched at all, fall back to the full known-owners list.
+  return uniqueOwners.length > 0 ? uniqueOwners : getKnownOwners(context);
+}
+
 export function suggestionBasisLabel(suggestion: ResolutionSuggestion): string {
   return suggestion.basis?.label ?? "Based on record-only heuristic";
 }

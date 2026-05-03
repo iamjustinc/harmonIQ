@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { EvidenceTier, IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
+import type { CRMRecord, EvidenceTier, IssueStatus, IssueType, ReferenceContext, ResolutionSuggestion, WorkflowMode } from "@/lib/types";
 import type { ApprovedChange } from "@/lib/types";
 import {
   fetchAIRecommendationWithStatus,
@@ -13,7 +13,7 @@ import {
   type AIRecommendationResult,
 } from "@/lib/aiRecommendation";
 import { DETECTED, generateChanges } from "@/lib/issueDetection";
-import { contextualizeSuggestion, EMPTY_REFERENCE_CONTEXT, suggestionBasisLabel } from "@/lib/referenceContext";
+import { contextualizeSuggestion, EMPTY_REFERENCE_CONTEXT, getAmbiguousOwners, getKnownOwners, suggestionBasisLabel } from "@/lib/referenceContext";
 import { getWorkflowImpactMetrics, getWorkflowIssueDefinitions, WORKFLOW_MODES } from "@/lib/workflows";
 import Sidebar from "./Sidebar";
 import {
@@ -87,9 +87,23 @@ type ManualFixRow = {
   basis: string;
   basisDetail: string;
   context: string;
+  /**
+   * For missing_owner rows with ambiguous_reference or insufficient_evidence
+   * tiers: the scoped list of internal owners to present as quick-pick options.
+   * Ambiguous records get territory-scoped owners; insufficient_evidence gets
+   * the full known-owners list. Absent for reference-backed suggestions.
+   */
+  knownOwners?: string[];
 };
 
-type ManualDecision = "suggested" | "manual" | "unchanged";
+/**
+ * "flagged"   — user saw the owner picker and deliberately chose to keep the
+ *               record as "Unassigned - Review". Logged to the owner field with
+ *               resolutionType "unresolved_review_required" so the export CSV
+ *               writes "Unassigned - Review" explicitly and the audit trail shows
+ *               a conscious decision was made.
+ */
+type ManualDecision = "suggested" | "manual" | "unchanged" | "flagged";
 
 let manualChangeCounter = 1;
 
@@ -264,10 +278,21 @@ function supportsManualFix(type: IssueType): boolean {
   return type === "missing_owner" || type === "missing_segment" || type === "invalid_email";
 }
 
+function ownerPickerOptions(
+  tier: EvidenceTier | undefined,
+  record: CRMRecord,
+  ctx: ReferenceContext
+): string[] | undefined {
+  if (tier === "ambiguous_reference") return getAmbiguousOwners(record, ctx);
+  if (tier === "insufficient_evidence") return getKnownOwners(ctx);
+  return undefined; // reference-backed rows already have a named suggestion
+}
+
 function getManualFixRows(type: IssueType, referenceContext: ReferenceContext): ManualFixRow[] {
   if (type === "missing_owner") {
     return DETECTED.missingOwner.map(({ record, ownerValue, suggestion }) => {
       const contextualSuggestion = contextualizeSuggestion(type, record, suggestion, referenceContext);
+      const tier = contextualSuggestion.basis?.evidenceTier;
       return {
         id: record.record_id,
         recordId: record.record_id,
@@ -281,6 +306,7 @@ function getManualFixRows(type: IssueType, referenceContext: ReferenceContext): 
         basis: suggestionBasisLabel(contextualSuggestion),
         basisDetail: contextualSuggestion.basis?.detail ?? "",
         context: `${record.segment || "No segment"} · ${record.state || "No state"}`,
+        knownOwners: ownerPickerOptions(tier, record, referenceContext),
       };
     });
   }
@@ -354,6 +380,32 @@ function buildManualChange(
     };
   }
 
+  /**
+   * "flagged" — reviewer saw the owner picker and consciously chose to keep
+   * "Unassigned - Review". The owner field is written to so the export CSV
+   * explicitly carries that value, and the audit trail shows a conscious decision.
+   */
+  if (decision === "flagged") {
+    return {
+      changeId,
+      recordId: row.recordId,
+      accountName: row.accountName,
+      field: row.field,
+      before: row.currentValue || "(blank)",
+      after: "Unassigned - Review",
+      issueType,
+      timestamp,
+      riskLevel,
+      userDecision: "Flagged",
+      basisLabel: "Kept unassigned after review",
+      basisStrength: "fallback",
+      resolutionType: "unresolved_review_required",
+      evidenceDetail: "Reviewer was shown known internal owners and chose to keep this record flagged for follow-up. Owner is the internal account owner; Email is the account contact.",
+    };
+  }
+
+  const isManualOwner = decision === "manual" && issueType === "missing_owner";
+
   return {
     changeId,
     recordId: row.recordId,
@@ -365,11 +417,17 @@ function buildManualChange(
     timestamp,
     riskLevel,
     userDecision: "Accepted",
-    basisLabel: decision === "suggested" ? row.basis : "Manual override",
+    basisLabel: decision === "suggested"
+      ? row.basis
+      : isManualOwner
+      ? "Manually selected owner"
+      : "Manual override",
     basisStrength: decision === "suggested" ? "strong" : "fallback",
-    resolutionType: "manual_override",
+    resolutionType: decision === "suggested" ? "manual_override" : "manual_override",
     evidenceDetail: decision === "suggested"
       ? `${row.basisDetail || row.rationale} Reviewer explicitly selected the suggested value in manual exception handling.`
+      : isManualOwner
+      ? "User selected the internal account owner after the system flagged insufficient or ambiguous evidence. Owner is the internal account owner; Email is the account contact."
       : "Reviewer manually entered this value in the constrained exception workflow.",
   };
 }
@@ -1315,36 +1373,86 @@ function ManualFixDrawer({
                     </div>
 
                     <div className="space-y-2.5">
-                      <div>
-                        <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500" htmlFor={`manual-${row.id}`}>
-                          Manual value
-                        </label>
-                        <input
-                          id={`manual-${row.id}`}
-                          value={draft.value}
-                          onChange={(event) => updateDraft(row, event.target.value, "manual")}
-                          placeholder={`Enter ${row.fieldLabel.toLowerCase()}`}
-                          className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
-                        <button
-                          type="button"
-                          disabled={!row.suggestedValue || isPlaceholderSuggestion(row.suggestedValue)}
-                          onClick={() => updateDraft(row, row.suggestedValue, "suggested")}
-                          className="rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          Use suggestion
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => updateDraft(row, row.currentValue, "unchanged")}
-                          className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
-                        >
-                          Leave unchanged
-                        </button>
-                      </div>
+                      {row.knownOwners && row.knownOwners.length > 0 ? (
+                        /* ── Owner quick-pick ── */
+                        <div className="space-y-2">
+                          <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                            Select internal account owner
+                          </p>
+                          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                            {row.knownOwners.map((owner) => {
+                              const isSelected = draft.decision === "manual" && draft.value === owner;
+                              return (
+                                <button
+                                  key={owner}
+                                  type="button"
+                                  onClick={() => updateDraft(row, owner, "manual")}
+                                  className={`truncate rounded-md border px-2.5 py-2 text-left text-xs font-bold transition-colors ${
+                                    isSelected
+                                      ? "border-indigo-400 bg-indigo-600 text-white"
+                                      : "border-slate-200 bg-white text-slate-700 hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-800"
+                                  }`}
+                                >
+                                  {owner}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateDraft(row, "Unassigned - Review", "flagged")}
+                              className={`rounded-md border px-2.5 py-1.5 text-xs font-bold transition-colors ${
+                                draft.decision === "flagged"
+                                  ? "border-amber-400 bg-amber-500 text-white"
+                                  : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                              }`}
+                            >
+                              Keep Unassigned — Review
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateDraft(row, row.currentValue, "unchanged")}
+                              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                            >
+                              Leave unchanged
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* ── Standard free-text input ── */
+                        <>
+                          <div>
+                            <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500" htmlFor={`manual-${row.id}`}>
+                              Manual value
+                            </label>
+                            <input
+                              id={`manual-${row.id}`}
+                              value={draft.value}
+                              onChange={(event) => updateDraft(row, event.target.value, "manual")}
+                              placeholder={`Enter ${row.fieldLabel.toLowerCase()}`}
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                            <button
+                              type="button"
+                              disabled={!row.suggestedValue || isPlaceholderSuggestion(row.suggestedValue)}
+                              onClick={() => updateDraft(row, row.suggestedValue, "suggested")}
+                              className="rounded-md border border-indigo-200 bg-white px-2.5 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              Use suggestion
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateDraft(row, row.currentValue, "unchanged")}
+                              className="rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                            >
+                              Leave unchanged
+                            </button>
+                          </div>
+                        </>
+                      )}
 
                       <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                         <div className="flex items-center justify-between gap-3">
@@ -1355,7 +1463,16 @@ function ManualFixDrawer({
                         <p className="mt-2 text-[11px] font-bold text-indigo-700">{row.basis}</p>
                         {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-500">{row.basisDetail}</p> : null}
                         <p className="mt-2 text-[11px] font-bold text-slate-500">
-                          Decision: {isUnchanged ? "Reviewed exception - left unchanged" : draft.decision === "suggested" ? "Using suggested value" : "Manual override"}
+                          Decision:{" "}
+                          {isUnchanged
+                            ? "Reviewed exception — left unchanged"
+                            : draft.decision === "flagged"
+                            ? "Kept unassigned for follow-up"
+                            : draft.decision === "suggested"
+                            ? "Using suggested value"
+                            : draft.decision === "manual" && row.knownOwners
+                            ? `Manually selected: ${draft.value}`
+                            : "Manual override"}
                         </p>
                       </div>
                     </div>
@@ -1803,6 +1920,26 @@ export default function ReviewScreen({
                 <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
               </section>
             ) : null}
+
+            {(() => {
+              const ownerPickRows = manualFixRows.filter((r) => r.knownOwners && r.knownOwners.length > 0);
+              const uniqueOwnerCount = new Set(ownerPickRows.flatMap((r) => r.knownOwners ?? [])).size;
+              return activeIssueType === "missing_owner" && ownerPickRows.length > 0 ? (
+                <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Manual assignment needed</p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-amber-900">
+                    <span className="font-black">{ownerPickRows.length}</span> record{ownerPickRows.length !== 1 ? "s" : ""} could not be inferred safely.
+                    Select an internal owner from the list or keep flagged for review.
+                  </p>
+                  <p className="mt-1 text-[11px] font-bold text-amber-700">
+                    {uniqueOwnerCount} known internal owner{uniqueOwnerCount !== 1 ? "s" : ""} available in reference data.
+                  </p>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800">
+                    Owner = internal account owner — not the contact email. Use "Resolve exceptions" to pick from the bounded list.
+                  </p>
+                </section>
+              ) : null;
+            })()}
 
             {aiStatus === "loading" ? (
               <section className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
