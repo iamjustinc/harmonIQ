@@ -13,6 +13,12 @@ interface SidebarProps {
   issueStatuses: Record<IssueType, IssueStatus>;
   workflowMode?: WorkflowMode;
   onNavigate?: (screen: NavigableScreen) => void;
+  /**
+   * Count of approved changes that resolved to a review-required placeholder
+   * value (e.g. "Unassigned - Review"). When > 0 the score label changes to
+   * "Reviewed Export Score" and the status text changes to "Ready with flags".
+   */
+  reviewRequiredFlags?: number;
 }
 
 const STEPS: { key: NavigableScreen; label: string }[] = [
@@ -27,7 +33,7 @@ const SCORE_COLOR = (s: number) =>
 
 const STEP_ORDER: AppScreen[] = ["upload", "profile", "review", "results"];
 
-export default function Sidebar({ screen, fileName, readinessScore, issueStatuses, workflowMode, onNavigate }: SidebarProps) {
+export default function Sidebar({ screen, fileName, readinessScore, issueStatuses, workflowMode, onNavigate, reviewRequiredFlags = 0 }: SidebarProps) {
   const currentIdx = STEP_ORDER.indexOf(screen);
   const reviewedCount = Object.values(issueStatuses).filter(s => s !== "pending").length;
   const totalIssues = ISSUE_DEFINITIONS.length;
@@ -109,7 +115,7 @@ export default function Sidebar({ screen, fileName, readinessScore, issueStatuse
       {(screen === "profile" || screen === "review" || screen === "results") && (
         <div className="mx-3 mb-3 rounded-lg border border-slate-700/50 bg-slate-800/60 p-3">
           <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            {workflow ? workflow.shortLabel : "Readiness"} Score
+            {reviewRequiredFlags > 0 ? "Reviewed Export" : (workflow ? workflow.shortLabel : "Readiness")} Score
           </p>
           <div className="flex items-center gap-3">
             {/* Mini gauge */}
@@ -137,7 +143,8 @@ export default function Sidebar({ screen, fileName, readinessScore, issueStatuse
               <p className="text-[10px] text-slate-400 leading-snug">
                 {readinessScore < 50 ? "Not ready" :
                  readinessScore < 70 ? "Needs work" :
-                 readinessScore < 85 ? "Near ready" : "Ready"}
+                 readinessScore < 85 ? "Near ready" :
+                 reviewRequiredFlags > 0 ? "Ready with flags" : "Ready"}
               </p>
             </div>
           </div>

@@ -57,8 +57,8 @@ const RESOLUTION_META: Record<ResolutionType, { label: string; shortLabel: strin
     dotClass: "bg-indigo-300",
   },
   ai_reviewed: {
-    label: "AI-reviewed",
-    shortLabel: "AI-reviewed",
+    label: "AI-assisted review",
+    shortLabel: "AI-assisted",
     className: "border-violet-200 bg-violet-50 text-violet-800",
     previewClass: "bg-violet-50 font-bold text-violet-800",
     dotClass: "bg-violet-300",
@@ -375,6 +375,7 @@ export default function ResultsScreen({
         issueStatuses={issueStatuses}
         workflowMode={workflowMode}
         onNavigate={onNavigate}
+        reviewRequiredFlags={resolutionCounts.unresolved_review_required}
       />
 
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
@@ -451,6 +452,11 @@ export default function ResultsScreen({
                           ? ` ${resolutionCounts.unresolved_review_required} record${resolutionCounts.unresolved_review_required !== 1 ? "s" : ""} carry a review-required placeholder and are exported with traceability intact.`
                           : " No review-required placeholders are present — the export is fully resolved."}
                       </p>
+                      {hasExportReviewFlags ? (
+                        <p className="mt-2 text-xs font-semibold text-orange-800">
+                          Reviewed CSV includes approved fixes plus traceable review-required placeholders.
+                        </p>
+                      ) : null}
                     </>
                   ) : (
                     <>
@@ -575,6 +581,11 @@ export default function ResultsScreen({
                 <ImpactMetricCard key={metric.label} metric={metric} />
               ))}
             </div>
+            {hasExportReviewFlags ? (
+              <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                Open risks are no longer silent — they are exported as review-required flags so every affected record remains traceable.
+              </p>
+            ) : null}
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white p-5">

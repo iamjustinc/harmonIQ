@@ -1659,6 +1659,15 @@ export default function ReviewScreen({
     onApprove(activeIssueType, annotateChangesWithAIReview(changes, activeIssueType, aiRecommendation, aiCandidates));
   };
 
+  /**
+   * When the representative suggestion for this issue type is a review-required
+   * placeholder (e.g. "Unassigned - Review"), the CTA should communicate that
+   * approving will write flags rather than clean values.
+   */
+  const approveButtonLabel = suggestionPreview && isPlaceholderSuggestion(suggestionPreview.suggestedValue)
+    ? "Apply review flags"
+    : "Approve Issue Type";
+
   const saveManualFixes = (changes: ApprovedChange[]) => {
     setManualFixOpen(false);
     onApprove(activeIssueType, changes);
@@ -1999,7 +2008,7 @@ export default function ReviewScreen({
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                     <path d="M2 7l3.5 3.5 6.5-6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  Approve Issue Type
+                  {approveButtonLabel}
                 </button>
                 {canManualFix ? (
                   <button
