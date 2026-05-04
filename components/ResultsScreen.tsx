@@ -306,6 +306,34 @@ export default function ResultsScreen({
     definition.severity === "blocking" || definition.severity === "high" || definition.severity === "medium-high"
   ));
   const hasUnresolvedRisk = unresolvedDefinitions.length > 0;
+  /** All issue types have a decision (approved or skipped) — none are still pending. */
+  const allIssuesDecided = pendingIssueCount === 0;
+  /**
+   * True when the export contains review-required placeholder values such as
+   * "Unassigned - Review" or "Needs Review". Distinct from hasUnresolvedRisk
+   * (which tracks whether issue types are still pending/skipped).
+   */
+  const hasExportReviewFlags = resolutionCounts.unresolved_review_required > 0;
+  /**
+   * Per-issue-type count of approved changes that resolved to a review-required
+   * placeholder value (owner = "Unassigned - Review", segment = "Needs Review",
+   * etc.). Excludes harmoniq_review_status and schema_notes fields so only
+   * actual data-field placeholders are counted.
+   */
+  const unresolvedByIssueType = useMemo(() => {
+    const counts: Partial<Record<IssueType, number>> = {};
+    for (const change of approvedChanges) {
+      if (
+        change.issueType &&
+        getResolutionType(change) === "unresolved_review_required" &&
+        change.field !== "harmoniq_review_status" &&
+        change.field !== "harmoniq_schema_notes"
+      ) {
+        counts[change.issueType] = (counts[change.issueType] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [approvedChanges]);
   const scoreGain = readinessScore - INITIAL_SCORE;
   const baseName = (fileName || "messy_crm_export").replace(/\.csv$/i, "");
 
@@ -330,9 +358,9 @@ export default function ResultsScreen({
   }, [changedFields, cleanedData]);
 
   const exportCleanedCsv = useCallback(() => {
-    const suffix = hasUnresolvedRisk ? "current_reviewed" : "cleaned";
+    const suffix = hasUnresolvedRisk || hasExportReviewFlags ? "reviewed" : "cleaned";
     downloadCsv(recordsToCsv(cleanedData), `${baseName}_harmoniq_${suffix}.csv`);
-  }, [baseName, cleanedData, hasUnresolvedRisk]);
+  }, [baseName, cleanedData, hasUnresolvedRisk, hasExportReviewFlags]);
 
   const exportChangeSummary = useCallback(() => {
     downloadCsv(changesToCsv(approvedChanges), `${baseName}_harmoniq_change_summary.csv`);
@@ -354,13 +382,23 @@ export default function ResultsScreen({
           title="Results"
           subtitle={`${fileName || "messy_crm_export.csv"} · ${workflow.label} · ${reviewedIssueCount}/${definitions.length} issue types reviewed · ${approvedChanges.length} logged changes`}
           badge={
-            hasUnresolvedRisk && reviewedIssueCount > 0 ? (
+            reviewedIssueCount === 0 ? (
+              <StatusPill status="pending" />
+            ) : !allIssuesDecided ? (
+              /* Some issue types still pending */
               <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
                 Partially reviewed
               </span>
+            ) : hasUnresolvedRisk || hasExportReviewFlags ? (
+              /* All decided, but some skipped or flagged values remain in export */
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-current opacity-50" />
+                Reviewed — export ready
+              </span>
             ) : (
-              <StatusPill status={hasUnresolvedRisk ? "pending" : approvedIssueCount > 0 ? "approved" : "pending"} />
+              /* All approved, no unresolved values */
+              <StatusPill status="approved" />
             )
           }
           actions={
@@ -389,34 +427,56 @@ export default function ResultsScreen({
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
                   <path d="M6 1v7M3 5.5l3 3 3-3M1.5 10.5h9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                {hasUnresolvedRisk ? "Export Current CSV" : "Export Cleaned CSV"}
+                {hasUnresolvedRisk || hasExportReviewFlags ? "Export Reviewed CSV" : "Export Cleaned CSV"}
               </button>
             </>
           }
         />
 
         <div className="max-w-6xl space-y-6 px-6 py-6">
-          {hasUnresolvedRisk ? (
+          {hasUnresolvedRisk || hasExportReviewFlags ? (
             <section className="rounded-lg border border-orange-200 bg-orange-50 p-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-3xl">
-                  <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Partial review export</p>
-                  <h2 className="mt-1 text-base font-black text-orange-950">Reviewed value is exportable, but unresolved risk remains.</h2>
-                  <p className="mt-2 text-sm leading-relaxed text-orange-900">
-                    {reviewedIssueCount} of {definitions.length} issue types have a decision. The current CSV reflects only approved changes so far; pending and skipped issue types stay unresolved for {workflow.shortLabel.toLowerCase()}.
-                  </p>
+                  {allIssuesDecided ? (
+                    <>
+                      <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Reviewed export</p>
+                      <h2 className="mt-1 text-base font-black text-orange-950">
+                        All issue types have been reviewed. Some records remain intentionally flagged where trusted evidence was insufficient.
+                      </h2>
+                      <p className="mt-2 text-sm leading-relaxed text-orange-900">
+                        {approvedIssueCount} of {definitions.length} issue types are approved
+                        {skippedIssueCount > 0 ? `; ${skippedIssueCount} deferred` : ""}.
+                        {hasExportReviewFlags
+                          ? ` ${resolutionCounts.unresolved_review_required} record${resolutionCounts.unresolved_review_required !== 1 ? "s" : ""} carry a review-required placeholder and are exported with traceability intact.`
+                          : " No review-required placeholders are present — the export is fully resolved."}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-bold uppercase tracking-wide text-orange-700">Partial review export</p>
+                      <h2 className="mt-1 text-base font-black text-orange-950">Reviewed value is exportable, but unresolved risk remains.</h2>
+                      <p className="mt-2 text-sm leading-relaxed text-orange-900">
+                        {reviewedIssueCount} of {definitions.length} issue types have a decision. The current CSV reflects only approved changes so far; pending and skipped issue types stay unresolved for {workflow.shortLabel.toLowerCase()}.
+                      </p>
+                    </>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onNavigate("review")}
-                  className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-800 hover:bg-orange-100"
-                >
-                  Continue Review
-                </button>
+                {!allIssuesDecided ? (
+                  <button
+                    type="button"
+                    onClick={() => onNavigate("review")}
+                    className="rounded-lg border border-orange-200 bg-white px-3 py-2 text-xs font-bold text-orange-800 hover:bg-orange-100"
+                  >
+                    Continue Review
+                  </button>
+                ) : null}
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <div className="rounded-lg border border-orange-200 bg-white/70 p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">Current readiness</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">
+                    {hasExportReviewFlags ? "Reviewed readiness" : "Current readiness"}
+                  </p>
                   <p className="mt-1 text-2xl font-black text-orange-950 tabular-nums">{readinessScore}</p>
                 </div>
                 <div className="rounded-lg border border-orange-200 bg-white/70 p-3">
@@ -428,20 +488,28 @@ export default function ResultsScreen({
                   <p className="mt-1 text-2xl font-black text-orange-950 tabular-nums">{skippedIssueCount}</p>
                 </div>
                 <div className="rounded-lg border border-orange-200 bg-white/70 p-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">High-risk unresolved</p>
-                  <p className="mt-1 text-2xl font-black text-orange-950 tabular-nums">{unresolvedBlockers.length}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-orange-700">
+                    {hasExportReviewFlags ? "Review-required flags" : "High-risk unresolved"}
+                  </p>
+                  <p className="mt-1 text-2xl font-black text-orange-950 tabular-nums">
+                    {hasExportReviewFlags ? resolutionCounts.unresolved_review_required : unresolvedBlockers.length}
+                  </p>
                 </div>
               </div>
-              <p className="mt-3 text-xs leading-relaxed text-orange-900">
-                Still unsafe or incomplete: {unresolvedDefinitions.slice(0, 3).map((definition) => definition.title).join(", ")}
-                {unresolvedDefinitions.length > 3 ? `, plus ${unresolvedDefinitions.length - 3} more` : ""}.
-              </p>
+              {!allIssuesDecided && unresolvedDefinitions.length > 0 ? (
+                <p className="mt-3 text-xs leading-relaxed text-orange-900">
+                  Still unsafe or incomplete: {unresolvedDefinitions.slice(0, 3).map((definition) => definition.title).join(", ")}
+                  {unresolvedDefinitions.length > 3 ? `, plus ${unresolvedDefinitions.length - 3} more` : ""}.
+                </p>
+              ) : null}
             </section>
           ) : null}
 
           <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
             <div className="rounded-lg border border-slate-200 bg-white p-5">
-              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Readiness comparison</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+                {hasExportReviewFlags ? "Reviewed readiness" : "Readiness comparison"}
+              </p>
               <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-5">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-slate-400">Before</p>
@@ -534,6 +602,11 @@ export default function ResultsScreen({
                 </div>
               ))}
             </div>
+            {resolutionCounts.unresolved_review_required > 0 ? (
+              <p className="mt-3 text-xs leading-relaxed text-amber-700">
+                Review-required values are exported intentionally so unresolved records remain traceable. These are not silent failures — each was reviewed and flagged by a human decision.
+              </p>
+            ) : null}
           </section>
 
           <section className="rounded-lg border border-slate-200 bg-white">
@@ -554,14 +627,27 @@ export default function ResultsScreen({
                 <tbody className="divide-y divide-slate-100">
                   {definitions.map((definition) => {
                     const status = issueStatuses[definition.type];
-                    const afterCount = status === "approved" ? 0 : definition.recordCount;
+                    const flaggedCount = unresolvedByIssueType[definition.type] ?? 0;
+                    // "After" communicates what remains genuinely unresolved.
+                    // Approved + all cleanly fixed → "0"
+                    // Approved + some converted to review placeholders → "0 blank / X flagged"
+                    // Not yet approved → original finding count
+                    const afterDisplay = status !== "approved"
+                      ? String(definition.recordCount)
+                      : flaggedCount > 0
+                      ? `0 blank / ${flaggedCount} flagged`
+                      : "0";
+                    const afterIsClean = status === "approved" && flaggedCount === 0;
+                    const afterIsFlagged = status === "approved" && flaggedCount > 0;
                     return (
                       <tr key={definition.type} className="hover:bg-slate-50">
                         <td className="px-4 py-3 text-xs font-black text-slate-900">{definition.title}</td>
                         <td className="px-4 py-3"><SeverityBadge severity={definition.severity} /></td>
                         <td className="px-4 py-3"><WorkflowLabel label={definition.workflowLabel} severity={definition.severity} /></td>
                         <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{definition.recordCount}</td>
-                        <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{afterCount}</td>
+                        <td className={`px-4 py-3 font-mono text-xs font-bold ${afterIsClean ? "text-emerald-600" : afterIsFlagged ? "text-amber-700" : "text-slate-700"}`}>
+                          {afterDisplay}
+                        </td>
                         <td className="px-4 py-3"><StatusPill status={status} /></td>
                       </tr>
                     );
@@ -573,7 +659,9 @@ export default function ResultsScreen({
 
           <section>
             <div className="mb-3 flex items-baseline justify-between gap-3">
-              <h2 className="text-base font-black text-slate-950">Cleaned Dataset Preview</h2>
+              <h2 className="text-base font-black text-slate-950">
+              {hasExportReviewFlags ? "Reviewed Dataset Preview" : "Cleaned Dataset Preview"}
+            </h2>
               <p className="text-xs font-medium text-slate-500">Changed records first; Owner = internal account owner, Email = account contact.</p>
             </div>
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -626,7 +714,10 @@ export default function ResultsScreen({
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-4 py-2">
                 <p className="text-[11px] font-medium text-slate-500">
-                  Showing {previewRows.length} of {cleanedData.length} rows. Export includes the full current dataset with approved changes only.
+                  Showing {previewRows.length} of {cleanedData.length} rows.{" "}
+                  {hasExportReviewFlags
+                    ? "Export includes the full reviewed dataset; review-required values are exported as traceable placeholders."
+                    : "Export includes the full current dataset with approved changes only."}
                 </p>
                 <div className="flex items-center gap-3">
                   {(Object.keys(RESOLUTION_META) as ResolutionType[]).map((type) => (
