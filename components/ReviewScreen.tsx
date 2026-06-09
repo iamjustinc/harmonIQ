@@ -22,7 +22,6 @@ import {
   DownstreamBox,
   ImpactMetricCard,
   IssueQueueItem,
-  RationaleBlock,
   ScoreImpactBox,
   SeverityBadge,
   StatusPill,
@@ -133,6 +132,50 @@ function suggestionStateLabel(suggestion: ResolutionSuggestion): string {
 function formatSavedAt(iso: string): string {
   if (!iso) return "Not saved yet";
   return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function firstSentence(text: string): string {
+  const match = text.trim().match(/^.+?[.!?](?:\s|$)/);
+  return match ? match[0].trim() : text.trim();
+}
+
+function compactSuggestionSummary(
+  issueType: IssueType,
+  suggestedValue: string,
+  rationale: string
+): string {
+  if (issueType === "missing_owner") {
+    return isPlaceholderSuggestion(suggestedValue)
+      ? "No trusted owner match. State and segment alone are not enough."
+      : "Trusted evidence supports this owner, pending review.";
+  }
+
+  if (issueType === "missing_segment") {
+    return isPlaceholderSuggestion(suggestedValue)
+      ? "No trusted segment match for this record."
+      : "Reference evidence supports this segment.";
+  }
+
+  if (issueType === "invalid_email") {
+    return suggestedValue ? "A safe syntax fix is available." : "No safe email fix was found.";
+  }
+
+  if (issueType === "schema_mismatch") {
+    return "Confirm the detected field mapping before export.";
+  }
+
+  return firstSentence(rationale);
+}
+
+function compactFlagReason(issueType: IssueType, row: FlagRow): string {
+  if (issueType === "missing_owner" || issueType === "missing_segment") {
+    return compactSuggestionSummary(issueType, row.suggestedValue, row.rationale);
+  }
+
+  if (issueType === "invalid_email") return row.issue;
+  if (issueType === "schema_mismatch") return row.issue;
+
+  return firstSentence(row.rationale);
 }
 
 function fallbackSuggestion(field: ResolutionSuggestion["field"], suggestedValue: string, rationale: string): ResolutionSuggestion {
@@ -880,7 +923,7 @@ function AIRecommendationPanel({
     <section className="rounded-lg border border-violet-200 bg-violet-50/60 p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5">
-          <p className="text-[10px] font-black uppercase tracking-wider text-violet-600">AI recommendation loaded</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-violet-600">AI recommendation ready</p>
           <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
             <path d="M6 1 7 4.5 10.5 5.5 7 6.5 6 10 5 6.5 1.5 5.5 5 4.5Z" fill="currentColor" className="text-violet-400" />
           </svg>
@@ -894,7 +937,7 @@ function AIRecommendationPanel({
 
       {recommendation.recommendedValue ? (
         <div className="mt-2 rounded-md border border-violet-200 bg-white/70 px-2 py-1.5">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Selected candidate</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-violet-500">Recommended</p>
           <p className="mt-0.5 text-sm font-black text-violet-950">{recommendation.recommendedValue}</p>
           {selectedCandidate ? (
             <p className="mt-1 text-[11px] leading-relaxed text-violet-700">{selectedCandidate.matchSummary}</p>
@@ -922,7 +965,7 @@ function AIRecommendationPanel({
 
       <div className="mt-2 rounded-md border border-violet-100 bg-white/60 p-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">Bounded candidates reviewed</p>
+          <p className="text-[10px] font-black uppercase tracking-wider text-violet-500">AI compared</p>
           <span className="text-[10px] font-bold text-violet-600">AI compared {candidates.length}</span>
         </div>
         <div className="mt-1.5 space-y-1">
@@ -981,7 +1024,7 @@ function AIRecommendationPanel({
           })}
         </div>
         <p className="mt-1.5 text-[10px] leading-relaxed text-violet-700">
-          Deterministic preview: {deterministicValue || "No deterministic value"}. AI output is not applied until the issue type is approved.
+          Current non-AI preview: {deterministicValue || "No deterministic value"}. AI stays pending until approval.
         </p>
       </div>
 
@@ -1030,10 +1073,10 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[980px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-slate-50/90">
             <tr className="border-b border-slate-200">
-              {["Scope", "Current value", "Candidate fill", "Confidence", "Rationale", "Review state"].map((heading) => (
+              {["Record", "Current", "Suggested", "Why", "Status"].map((heading) => (
                 <th key={heading} className="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">
                   {heading}
                 </th>
@@ -1041,26 +1084,24 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 bg-white">
-            {rows.slice(0, 12).map((row) => (
+            {rows.slice(0, 8).map((row) => (
               <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-4 py-3 text-xs font-bold text-slate-800">{row.scope}</td>
+                <td className="px-4 py-3">
+                  <p className="text-xs font-bold text-slate-800">{row.scope}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{row.issue}</p>
+                </td>
                 <td className="px-4 py-3">
                   <span className="rounded border border-red-200 bg-red-50 px-2 py-1 font-mono text-xs text-red-700">{row.current}</span>
                 </td>
-                <td className="px-4 py-3 text-xs font-semibold">
-                  {isPlaceholderSuggestion(row.suggestedValue)
-                    ? <span className="italic text-amber-700">{row.suggestedValue}</span>
-                    : <span className="text-slate-800">{row.suggestedValue}</span>}
-                </td>
                 <td className="px-4 py-3">
-                  <ConfidenceDots pct={row.confidence} />
-                </td>
-                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">
-                  <p>{row.rationale}</p>
-                  <p className="mt-1 font-bold text-indigo-700">{row.basis}</p>
-                  {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-400">{row.basisDetail}</p> : null}
+                  {isPlaceholderSuggestion(row.suggestedValue)
+                    ? <p className="text-xs font-semibold italic text-amber-700">{row.suggestedValue}</p>
+                    : <p className="text-xs font-semibold text-slate-800">{row.suggestedValue}</p>}
+                  <div className="mt-1.5">
+                    <ConfidenceDots pct={row.confidence} />
+                  </div>
                   {row.evidenceTier ? (
-                    <p className={`mt-1 inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                    <p className={`mt-1.5 inline-block rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                       row.evidenceTier === "exact_reference_match" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
                       row.evidenceTier === "strong_reference_match" ? "border-indigo-200 bg-indigo-50 text-indigo-700" :
                       row.evidenceTier === "rule_supported_match" ? "border-blue-200 bg-blue-50 text-blue-700" :
@@ -1072,6 +1113,11 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                     </p>
                   ) : null}
                 </td>
+                <td className="px-4 py-3 text-xs leading-relaxed text-slate-600">
+                  <p className="font-medium text-slate-700">{compactFlagReason(issueType, row)}</p>
+                  <p className="mt-1 font-bold text-indigo-700">{row.basis}</p>
+                  {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-400">{row.basisDetail}</p> : null}
+                </td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full border px-2 py-1 text-[11px] font-bold ${
                     isPlaceholderSuggestion(row.suggestedValue)
@@ -1080,16 +1126,15 @@ function FlagTable({ issueType, referenceContext }: { issueType: IssueType; refe
                   }`}>
                     {row.reviewState}
                   </span>
-                  <p className="mt-1 text-[11px] text-slate-400">{row.issue}</p>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      {rows.length > 12 ? (
+      {rows.length > 8 ? (
         <div className="border-t border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-medium text-slate-500">
-          Showing 12 of {rows.length} findings. Full detail is included in the exported change summary.
+          Showing 8 of {rows.length} findings. Full detail is included in the exported change summary.
         </div>
       ) : null}
     </div>
@@ -1456,20 +1501,22 @@ function ManualFixDrawer({
 
                       <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Suggestion rationale</p>
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Why this is flagged</p>
                           <ConfidenceDots pct={row.confidence} />
                         </div>
-                        <p className="mt-2 text-xs leading-relaxed text-slate-600">{row.rationale}</p>
+                        <p className="mt-2 text-xs leading-relaxed text-slate-600">
+                          {compactSuggestionSummary(issueType, row.suggestedValue, row.rationale)}
+                        </p>
                         <p className="mt-2 text-[11px] font-bold text-indigo-700">{row.basis}</p>
                         {row.basisDetail ? <p className="mt-0.5 text-[11px] text-slate-500">{row.basisDetail}</p> : null}
                         <p className="mt-2 text-[11px] font-bold text-slate-500">
                           Decision:{" "}
                           {isUnchanged
-                            ? "Reviewed exception — left unchanged"
+                            ? "Left unchanged"
                             : draft.decision === "flagged"
-                            ? "Kept unassigned for follow-up"
+                            ? "Kept unassigned"
                             : draft.decision === "suggested"
-                            ? "Using suggested value"
+                            ? "Using suggestion"
                             : draft.decision === "manual" && row.knownOwners
                             ? `Manually selected: ${draft.value}`
                             : "Manual override"}
@@ -1666,7 +1713,7 @@ export default function ReviewScreen({
    */
   const approveButtonLabel = suggestionPreview && isPlaceholderSuggestion(suggestionPreview.suggestedValue)
     ? "Apply review flags"
-    : "Approve Issue Type";
+    : "Approve issue";
 
   const saveManualFixes = (changes: ApprovedChange[]) => {
     setManualFixOpen(false);
@@ -1684,7 +1731,7 @@ export default function ReviewScreen({
         onNavigate={onNavigate}
       />
 
-      <aside className="flex h-full w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <aside className="flex h-full w-[17rem] shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="border-b border-slate-200 px-4 py-4">
           <h2 className="text-sm font-black text-slate-950">Issue Queue</h2>
           <div className="mt-1 flex items-center justify-between gap-2">
@@ -1732,7 +1779,7 @@ export default function ReviewScreen({
       <main className="min-w-0 flex-1 overflow-y-auto bg-slate-50">
         <StickyDatasetHeader
           title={definition.title}
-          subtitle={`${definition.recordCount} findings · ${workflow.label} · ${definition.businessImpact}`}
+          subtitle={`${definition.recordCount} findings · ${workflow.label} · ${definition.workflowLabel}`}
           badge={
             <div className="flex flex-wrap items-center gap-2">
               <SeverityBadge severity={definition.severity} />
@@ -1748,20 +1795,13 @@ export default function ReviewScreen({
                 onClick={onSaveProgress}
                 className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
               >
-                Save progress
-              </button>
-              <button
-                type="button"
-                onClick={onFinish}
-                className="h-9 rounded-lg bg-indigo-600 px-3 text-xs font-bold text-white hover:bg-indigo-700"
-              >
-                Export current state
+                Save
               </button>
             </>
           }
         />
 
-        <div className="space-y-5 px-6 py-5">
+        <div className="space-y-4 px-5 py-4">
           <section className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="grid gap-3 md:grid-cols-4">
               <div>
@@ -1787,24 +1827,27 @@ export default function ReviewScreen({
                 <p className="text-xs text-slate-500">{unresolvedBlockers.length} blockers or high-risk items</p>
               </div>
             </div>
-            <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-xs leading-relaxed text-slate-600">
-                {unresolvedDefinitions.length > 0
-                  ? `Current export will include approved changes only. ${unresolvedBlockers[0]?.title ?? unresolvedDefinitions[0]?.title} remains unsafe for ${workflow.shortLabel.toLowerCase()} until reviewed.`
-                  : `All issue types have a reviewed decision for ${workflow.shortLabel.toLowerCase()}.`}
-              </p>
-              <p className="mt-1 text-[11px] font-bold text-slate-500">Last saved: {formatSavedAt(lastSavedAt)}</p>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Current state</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                  {unresolvedDefinitions.length > 0
+                    ? `Current export includes approved changes only. ${unresolvedBlockers[0]?.title ?? unresolvedDefinitions[0]?.title} still needs review for ${workflow.shortLabel.toLowerCase()}.`
+                    : `All issue types have a reviewed decision for ${workflow.shortLabel.toLowerCase()}.`}
+                </p>
+                <p className="mt-1.5 text-[11px] font-bold text-slate-500">Last saved: {formatSavedAt(lastSavedAt)}</p>
+              </div>
+              <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400">Why now</p>
+                <p className="mt-1 text-xs leading-relaxed text-slate-600">{definition.priorityReason}</p>
+              </div>
             </div>
           </section>
-
-          <RationaleBlock title={`Why this ranks for ${workflow.shortLabel}`}>
-            <p>{definition.priorityReason}</p>
-          </RationaleBlock>
 
           <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
               <div>
-                <h2 className="text-sm font-black text-slate-950">Downstream Impact Simulator</h2>
+                <h2 className="text-sm font-black text-slate-950">Workflow impact</h2>
                 <p className="mt-1 text-xs text-slate-500">{workflow.primaryRisk}</p>
               </div>
               <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700">
@@ -1822,12 +1865,13 @@ export default function ReviewScreen({
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
               <div>
                 <h2 className="text-sm font-black text-slate-950">Record Evidence</h2>
+                <p className="mt-1 text-xs text-slate-500">Affected records and review state</p>
               </div>
               <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600">
                 {definition.reviewMode}
               </span>
             </div>
-            <div className="p-3.5">
+            <div className="p-3">
               <RecordPreview issueType={activeIssueType} referenceContext={activeReferenceContext} />
             </div>
           </section>
@@ -1836,7 +1880,7 @@ export default function ReviewScreen({
 
       <aside
         className={`flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white transition-[width] duration-200 ease-out ${
-          recommendationCollapsed ? "w-[4.25rem]" : "w-80"
+          recommendationCollapsed ? "w-16" : "w-[21rem]"
         }`}
       >
         <div className={recommendationCollapsed ? "flex h-full flex-col items-center bg-slate-50/95 shadow-[inset_1px_0_0_rgba(226,232,240,0.75)]" : "hidden"}>
@@ -1879,9 +1923,9 @@ export default function ReviewScreen({
                       <path d="M6.5 2v9M2 6.5h9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                     </svg>
                   </div>
-                  <h2 className="truncate text-sm font-black text-slate-950">Analysis &amp; Recommendation</h2>
+                  <h2 className="truncate text-sm font-black text-slate-950">Recommendation</h2>
                 </div>
-                <p className="mt-1 text-[11px] text-slate-400">{workflow.label} mode · human approval required</p>
+                <p className="mt-1 text-[11px] text-slate-400">{workflow.label} · review required</p>
               </div>
               <button
                 type="button"
@@ -1897,29 +1941,31 @@ export default function ReviewScreen({
           </div>
 
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <section>
-              <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Issue type</p>
-              <p className="text-sm font-black text-slate-900">{definition.title}</p>
-            </section>
-
-            <section>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Detection confidence</p>
-              <ConfidenceDots pct={definition.confidence} />
-            </section>
-
-            <section>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk level</p>
-              <SeverityBadge severity={definition.severity} />
+            <section className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:col-span-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Issue type</p>
+                <p className="mt-1 text-sm font-black text-slate-900">{definition.title}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Confidence</p>
+                <ConfidenceDots pct={definition.confidence} />
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:col-span-2">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk</p>
+                <SeverityBadge severity={definition.severity} />
+              </div>
             </section>
 
             {suggestionPreview ? (
               <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Missing-value suggestion</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Suggested value</p>
                 <p className="mt-2 text-sm font-black text-indigo-950">{suggestionPreview.suggestedValue}</p>
                 <div className="mt-2">
                   <ConfidenceDots pct={suggestionPreview.confidence} />
                 </div>
-                <p className="mt-2 text-xs leading-relaxed text-indigo-900">{suggestionPreview.rationale}</p>
+                <p className="mt-2 text-xs leading-relaxed text-indigo-900">
+                  {compactSuggestionSummary(activeIssueType, suggestionPreview.suggestedValue, suggestionPreview.rationale)}
+                </p>
                 <p className="mt-2 rounded-md border border-indigo-200 bg-white/70 px-2 py-1 text-[11px] font-bold text-indigo-800">
                   {suggestionBasisLabel(suggestionPreview)}
                 </p>
@@ -1937,14 +1983,13 @@ export default function ReviewScreen({
                 <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Manual assignment needed</p>
                   <p className="mt-1.5 text-xs leading-relaxed text-amber-900">
-                    <span className="font-black">{ownerPickRows.length}</span> record{ownerPickRows.length !== 1 ? "s" : ""} could not be inferred safely.
-                    Select an internal owner from the list or keep flagged for review.
+                    <span className="font-black">{ownerPickRows.length}</span> record{ownerPickRows.length !== 1 ? "s" : ""} still {ownerPickRows.length === 1 ? "needs" : "need"} a reviewer-selected owner.
                   </p>
                   <p className="mt-1 text-[11px] font-bold text-amber-700">
-                    {uniqueOwnerCount} known internal owner{uniqueOwnerCount !== 1 ? "s" : ""} available in reference data.
+                    {uniqueOwnerCount} known internal owner{uniqueOwnerCount !== 1 ? "s" : ""} available.
                   </p>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-amber-800">
-                    Owner = internal account owner — not the contact email. Use "Resolve exceptions" to pick from the bounded list.
+                    Use Review exceptions to choose from the bounded owner list.
                   </p>
                 </section>
               ) : null;
@@ -1952,7 +1997,7 @@ export default function ReviewScreen({
 
             {aiStatus === "loading" ? (
               <section className="rounded-lg border border-violet-100 bg-violet-50/50 p-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">AI recommendation loading</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">AI loading</p>
                 <p className="mt-1 text-[11px] font-medium text-violet-700">{aiStatusMessage}</p>
                 <div className="mt-2 h-3 w-3/4 rounded bg-violet-100" />
                 <div className="mt-1.5 h-3 w-1/2 rounded bg-violet-100" />
@@ -1969,30 +2014,32 @@ export default function ReviewScreen({
               <AIFallbackPanel status={aiStatus} message={aiStatusMessage} />
             ) : null}
 
-            <section>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Rationale</p>
-              <p className="text-xs leading-relaxed text-slate-700">{definition.whyItMatters}</p>
-            </section>
-
-            <section>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Suggested action</p>
-              <p className="text-xs leading-relaxed text-slate-700">{definition.suggestedAction}</p>
-            </section>
-
-            <section>
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">Business implication</p>
-              <p className="text-xs leading-relaxed text-slate-700">{definition.businessImpact}</p>
+            <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <dl className="space-y-2 text-xs">
+                <div>
+                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Why this matters</dt>
+                  <dd className="leading-relaxed text-slate-700">{firstSentence(definition.whyItMatters)}</dd>
+                </div>
+                <div>
+                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Action</dt>
+                  <dd className="leading-relaxed text-slate-700">{firstSentence(definition.suggestedAction)}</dd>
+                </div>
+                <div>
+                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Impact</dt>
+                  <dd className="leading-relaxed text-slate-700">{definition.businessImpact}</dd>
+                </div>
+              </dl>
             </section>
 
             <DownstreamBox>{definition.downstreamImplication}</DownstreamBox>
             <ScoreImpactBox points={definition.readinessImpact} />
 
             <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Trust cues</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Review controls</p>
               <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-600">
-                <li>Changes apply at the issue type level — no row-level editing.</li>
-                <li>Every approved change is logged with issue linkage and timestamp.</li>
-                <li>All decisions are reversible until export.</li>
+                <li>Approvals apply at the issue level.</li>
+                <li>Every decision is logged.</li>
+                <li>Undo stays available until export.</li>
               </ul>
             </section>
           </div>
@@ -2010,26 +2057,28 @@ export default function ReviewScreen({
                   </svg>
                   {approveButtonLabel}
                 </button>
-                {canManualFix ? (
+                <div className={`grid gap-2 ${canManualFix ? "grid-cols-2" : "grid-cols-1"}`}>
+                  {canManualFix ? (
+                    <button
+                      type="button"
+                      onClick={() => setManualFixOpen(true)}
+                      className="flex h-9 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+                        <path d="M7.5 2.5 10.5 5.5 4.5 11.5H1.5v-3L7.5 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M6.5 3.5 9.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      </svg>
+                      Review exceptions
+                    </button>
+                  ) : null}
                   <button
                     type="button"
-                    onClick={() => setManualFixOpen(true)}
-                    className="flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                    onClick={() => onSkip(activeIssueType)}
+                    className="flex h-9 items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                   >
-                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-                      <path d="M7.5 2.5 10.5 5.5 4.5 11.5H1.5v-3L7.5 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-                      <path d="M6.5 3.5 9.5 6.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                    </svg>
-                    Resolve exceptions
+                    Skip
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => onSkip(activeIssueType)}
-                  className="flex h-9 w-full items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-                >
-                  Skip for now
-                </button>
+                </div>
               </>
             ) : (
               <>
@@ -2052,14 +2101,14 @@ export default function ReviewScreen({
                 onClick={onSaveProgress}
                 className="flex h-9 items-center justify-center rounded-lg border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:text-slate-800"
               >
-                Save progress
+                Save
               </button>
               <button
                 type="button"
                 onClick={onFinish}
                 className="flex h-9 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
               >
-                Export current
+                Export
               </button>
             </div>
 
