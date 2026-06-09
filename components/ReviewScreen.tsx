@@ -19,7 +19,6 @@ import Sidebar from "./Sidebar";
 import {
   ConfidenceDots,
   DiffCell,
-  DownstreamBox,
   ImpactMetricCard,
   IssueQueueItem,
   ScoreImpactBox,
@@ -1057,10 +1056,8 @@ function AIFallbackPanel({
   return (
     <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
       <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">{title}</p>
-      <p className="mt-2 text-xs leading-relaxed text-slate-600">{message}</p>
-      <p className="mt-2 text-[11px] font-bold text-slate-500">
-        Deterministic and reference-derived recommendations remain visible for approval.
-      </p>
+      <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{message}</p>
+      <p className="mt-1.5 text-[11px] font-bold text-slate-500">Review the grounded suggestion or assign manually.</p>
     </section>
   );
 }
@@ -1422,7 +1419,7 @@ function ManualFixDrawer({
                         /* ── Owner quick-pick ── */
                         <div className="space-y-2">
                           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                            Select internal account owner
+                            Suggestions
                           </p>
                           <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                             {row.knownOwners.map((owner) => {
@@ -1442,6 +1439,18 @@ function ManualFixDrawer({
                                 </button>
                               );
                             })}
+                          </div>
+                          <div>
+                            <label className="text-[11px] font-bold uppercase tracking-wide text-slate-500" htmlFor={`manual-${row.id}`}>
+                              Type your own value
+                            </label>
+                            <input
+                              id={`manual-${row.id}`}
+                              value={draft.decision === "manual" ? draft.value : ""}
+                              onChange={(event) => updateDraft(row, event.target.value, "manual")}
+                              placeholder="Enter internal owner"
+                              className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-indigo-500"
+                            />
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <button
@@ -1880,7 +1889,7 @@ export default function ReviewScreen({
 
       <aside
         className={`flex h-full shrink-0 flex-col overflow-hidden border-l border-slate-200 bg-white transition-[width] duration-200 ease-out ${
-          recommendationCollapsed ? "w-16" : "w-[21rem]"
+          recommendationCollapsed ? "w-16" : "w-[23rem]"
         }`}
       >
         <div className={recommendationCollapsed ? "flex h-full flex-col items-center bg-slate-50/95 shadow-[inset_1px_0_0_rgba(226,232,240,0.75)]" : "hidden"}>
@@ -1940,19 +1949,12 @@ export default function ReviewScreen({
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-            <section className="grid gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:col-span-3">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Issue type</p>
-                <p className="mt-1 text-sm font-black text-slate-900">{definition.title}</p>
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Confidence</p>
-                <ConfidenceDots pct={definition.confidence} />
-              </div>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 sm:col-span-2">
-                <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Risk</p>
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+            <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <p className="text-sm font-black text-slate-900">{definition.title}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <SeverityBadge severity={definition.severity} />
+                <ConfidenceDots pct={definition.confidence} />
               </div>
             </section>
 
@@ -1960,8 +1962,11 @@ export default function ReviewScreen({
               <section className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">Suggested value</p>
                 <p className="mt-2 text-sm font-black text-indigo-950">{suggestionPreview.suggestedValue}</p>
-                <div className="mt-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <ConfidenceDots pct={suggestionPreview.confidence} />
+                  <span className="rounded-md border border-indigo-200 bg-white/70 px-2 py-1 text-[11px] font-bold text-indigo-800">
+                    {suggestionStateLabel(suggestionPreview)}
+                  </span>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-indigo-900">
                   {compactSuggestionSummary(activeIssueType, suggestionPreview.suggestedValue, suggestionPreview.rationale)}
@@ -1972,7 +1977,6 @@ export default function ReviewScreen({
                 {suggestionPreview.basis?.detail ? (
                   <p className="mt-1 text-[11px] leading-relaxed text-indigo-800">{suggestionPreview.basis.detail}</p>
                 ) : null}
-                <p className="mt-2 text-[11px] font-bold text-indigo-700">{suggestionStateLabel(suggestionPreview)}</p>
               </section>
             ) : null}
 
@@ -2020,28 +2024,24 @@ export default function ReviewScreen({
                   <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Why this matters</dt>
                   <dd className="leading-relaxed text-slate-700">{firstSentence(definition.whyItMatters)}</dd>
                 </div>
-                <div>
-                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Action</dt>
-                  <dd className="leading-relaxed text-slate-700">{firstSentence(definition.suggestedAction)}</dd>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Action</dt>
+                    <dd className="leading-relaxed text-slate-700">{firstSentence(definition.suggestedAction)}</dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Impact</dt>
+                    <dd className="leading-relaxed text-slate-700">{definition.businessImpact}</dd>
+                  </div>
                 </div>
                 <div>
-                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Impact</dt>
-                  <dd className="leading-relaxed text-slate-700">{definition.businessImpact}</dd>
+                  <dt className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">Downstream</dt>
+                  <dd className="leading-relaxed text-slate-700">{firstSentence(definition.downstreamImplication)}</dd>
                 </div>
               </dl>
             </section>
 
-            <DownstreamBox>{definition.downstreamImplication}</DownstreamBox>
             <ScoreImpactBox points={definition.readinessImpact} />
-
-            <section className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Review controls</p>
-              <ul className="mt-2 space-y-1.5 text-xs leading-relaxed text-slate-600">
-                <li>Approvals apply at the issue level.</li>
-                <li>Every decision is logged.</li>
-                <li>Undo stays available until export.</li>
-              </ul>
-            </section>
           </div>
 
           <div className="space-y-2 border-t border-slate-200 p-4">
