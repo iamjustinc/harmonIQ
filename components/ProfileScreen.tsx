@@ -60,6 +60,8 @@ export default function ProfileScreen({
     counts[definition.category] = (counts[definition.category] ?? 0) + definition.recordCount;
     return counts;
   }, {});
+  const categoryEntries = Object.entries(issueCountsByCategory).sort(([, left], [, right]) => right - left);
+  const maxCategoryCount = Math.max(...categoryEntries.map(([, count]) => count), 1);
 
   return (
     <div className="flex h-full min-h-screen">
@@ -152,19 +154,44 @@ export default function ProfileScreen({
             </div>
           </section>
 
-          <section className="grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+          <section className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-lg border border-slate-200 bg-white p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-black text-slate-950">Issue Count By Category</h2>
                 <span className="text-xs font-semibold text-slate-500">Record-level findings</span>
               </div>
-              <div className="space-y-2">
-                {Object.entries(issueCountsByCategory).map(([category, count]) => (
-                  <div key={category} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2.5">
-                    <span className="text-sm font-bold text-slate-800">{category}</span>
-                    <span className="font-mono text-sm font-black text-slate-950">{count}</span>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {categoryEntries.map(([category, count]) => {
+                  const width = Math.max((count / maxCategoryCount) * 100, 10);
+                  return (
+                    <div key={category} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-slate-800">{category}</span>
+                        <span className="font-mono text-sm font-black text-slate-950">{count}</span>
+                      </div>
+                      <div className="relative h-8 overflow-hidden rounded-md border border-slate-200 bg-white">
+                        <div
+                          className="absolute inset-y-0 left-0 rounded-md bg-indigo-100"
+                          style={{ width: `${width}%` }}
+                        />
+                        <div
+                          className="absolute inset-0 opacity-70"
+                          style={{
+                            backgroundImage: "linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px)",
+                            backgroundSize: "24px 100%",
+                          }}
+                          aria-hidden="true"
+                        />
+                        <div className="relative flex h-full items-center justify-between px-3">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                            {Math.round((count / maxCategoryCount) * 100)}% of max
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-500">{count} findings</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
